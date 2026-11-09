@@ -1,11 +1,11 @@
 [build-system]
-requires = ["hatchling>=1.27"]
-build-backend = "hatchling.build"
+requires = ["poetry-core>=2.2"]
+build-backend = "poetry.core.masonry.api"
 
 [project]
 name = "docfgp"
-version = "0.1.0"
-description = "Generate deterministic fingerprints for documents"
+version = "0.1.1"
+description = "DocFGP is a Python library that fingerprints documents to find duplicates."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
@@ -18,17 +18,16 @@ classifiers = [
 dependencies = ["pypdfium2>=4.30,<6", "Pillow>=10,<14"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "ruff>=0.11", "mypy>=1.15", "build>=1.2", "psutil>=6", "reportlab>=4"]
 benchmark = ["psutil>=6", "datasets>=3,<5"]
 
 [project.scripts]
 docfgp = "docfgp.cli:main"
 
-[tool.hatch.build.targets.wheel]
-packages = ["src/docfgp"]
+[dependency-groups]
+dev = ["pytest>=8", "ruff>=0.11", "mypy>=1.15", "psutil>=6", "reportlab>=4"]
 
-[tool.hatch.build.targets.sdist]
-exclude = ["/.github", "/.gitattributes", "/uv.lock"]
+[tool.poetry.dependencies]
+python = ">=3.11,<4"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -48,8 +48,8 @@ CPU time combines Python process time with sampled child-process time. Peak RAM 
 Install the library with its development dependencies, obtain the business golden corpus and the office2pdf and Tesseract executables, then run from the repository root:
 
 ```bash
-pip install ".[dev]"
-python -m scripts.evaluate_office /path/to/business --office2pdf /path/to/office2pdf --tesseract /path/to/tesseract
+poetry install
+poetry run python -m scripts.evaluate_office /path/to/business --office2pdf /path/to/office2pdf --tesseract /path/to/tesseract
 ```
 
 The command prints the metrics and counts as JSON. Record the corpus revision, command, hardware, operating system, Python version, and converter/OCR versions with any subsequent result. Corpus evaluations are separate from CI.

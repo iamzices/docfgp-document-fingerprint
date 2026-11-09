@@ -92,7 +92,7 @@ def main(argv: list[str] | None = None) -> int:
         from datasets import load_dataset
         from huggingface_hub import HfApi
     except ImportError as exc:
-        raise SystemExit("Install the benchmark extra: pip install '.[benchmark]'") from exc
+        raise SystemExit("Install the benchmark extra: poetry install -E benchmark") from exc
     revision = args.revision
     if revision is None and not Path(args.dataset).exists():
         revision = HfApi().dataset_info(args.dataset).sha

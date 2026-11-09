@@ -18,11 +18,12 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
-      - run: python -m pip install -e ".[dev]"
-      - run: ruff check .
-      - run: ruff format --check .
-      - run: mypy
-      - run: python -m build
+      - run: pipx install poetry
+      - run: poetry install
+      - run: poetry run ruff check .
+      - run: poetry run ruff format --check .
+      - run: poetry run mypy
+      - run: poetry build
 
   test:
     runs-on: ubuntu-latest
@@ -34,11 +35,12 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
-      - run: python -m pip install -e ".[dev]"
+      - run: pipx install poetry
+      - run: poetry install
       - run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng
-      - run: python -m pytest -q
+      - run: poetry run python -m pytest -q
         env:
           DOCFGP_TEST_TESSERACT: /usr/bin/tesseract
 
@@ -55,7 +57,7 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: "3.x"
-      - run: python -m pip install build
-      - run: python -m build
+      - run: pipx install poetry
+      - run: poetry build
       - uses: pypa/gh-action-pypi-publish@release/v1
 
