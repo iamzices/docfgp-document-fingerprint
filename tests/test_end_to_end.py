@@ -1,4 +1,4 @@
-"""Exercise PDF, image, OCR, and CLI output contracts."""
+"""Exercise PDF, Office, image, OCR, and CLI output contracts."""
 
 import json
 import os
@@ -13,12 +13,44 @@ from PIL import Image, ImageDraw
 from reportlab.pdfgen import canvas
 
 from docfgp import DocumentFingerprint, FingerprintConfig, Fingerprinter, FingerprintError, ocr
+from docfgp.fingerprint import _accept_ocr
 
 
 def _pdf(path: Path, text: str) -> None:
     document = canvas.Canvas(str(path))
     document.drawString(72, 720, text)
     document.save()
+
+
+def _docx(path: Path, text: str) -> None:
+    content_types = (
+        '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">'
+        '<Default Extension="rels" '
+        'ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Override PartName="/word/document.xml" ContentType="application/'
+        'vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/></Types>'
+    )
+    relationships = (
+        '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        '<Relationship Id="rId1" Target="word/document.xml" Type="http://schemas.'
+        'openxmlformats.org/officeDocument/2006/relationships/officeDocument"/></Relationships>'
+    )
+    document = (
+        '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">'
+        f"<w:body><w:p><w:r><w:t>{text}</w:t></w:r></w:p></w:body></w:document>"
+    )
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("[Content_Types].xml", content_types)
+        archive.writestr("_rels/.rels", relationships)
+        archive.writestr("word/document.xml", document)
+
+
+def _languages_package(root: Path, source: str) -> dict[str, str]:
+    package = root / "docfgp_languages"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text(source)
+    path = os.pathsep.join(filter(None, (str(root), os.environ.get("PYTHONPATH"))))
+    return {**os.environ, "PYTHONPATH": path}
 
 
 def _scan_image(path: Path) -> None:
@@ -36,7 +68,7 @@ def test_pdf_is_deterministic_and_serializable(tmp_path: Path) -> None:
     """Generate identical complete fingerprints from repeat PDF invocations."""
     path = tmp_path / "one.pdf"
     _pdf(path, "alpha beta gamma delta epsilon zeta 123")
-    fingerprinter = Fingerprinter(FingerprintConfig(tesseract_path="missing-tesseract"))
+    fingerprinter = Fingerprinter()
     first = fingerprinter.fingerprint(path)
     second = fingerprinter.fingerprint(path)
     assert isinstance(first, DocumentFingerprint)
@@ -57,13 +89,25 @@ def test_pdf_is_deterministic_and_serializable(tmp_path: Path) -> None:
     assert first.exact_hashes["raw_sha256"] != "changed"
 
 
+def test_docx_converts_to_pdf_text(tmp_path: Path) -> None:
+    """Match the canonical text of a DOCX and an equivalent PDF."""
+    docx = tmp_path / "one.docx"
+    _docx(docx, "alpha beta gamma delta epsilon zeta 123")
+    pdf = tmp_path / "one.pdf"
+    _pdf(pdf, "alpha beta gamma delta epsilon zeta 123")
+    office = Fingerprinter().fingerprint(docx)
+    native = Fingerprinter().fingerprint(pdf)
+    assert office.source_format == "docx"
+    assert office.exact_hashes["canonical_sha256"] == native.exact_hashes["canonical_sha256"]
+
+
 def test_image_and_blank_evidence_states(tmp_path: Path) -> None:
     """Report visual-only and insufficient-evidence outcomes explicitly."""
     path = tmp_path / "image.png"
     image = Image.new("RGB", (300, 100), "white")
     ImageDraw.Draw(image).rectangle((30, 20, 100, 80), fill="black")
     image.save(path)
-    config = FingerprintConfig(tesseract_path="missing-tesseract")
+    config = FingerprintConfig()
     visual = Fingerprinter(config).fingerprint(path)
     assert visual.quality.status == "visual_only"
     assert visual.exact_hashes["canonical_sha256"] is None
@@ -82,14 +126,12 @@ def test_image_metadata_and_transparency(tmp_path: Path) -> None:
     ImageDraw.Draw(image).rectangle((10, 10, 40, 40), fill="black")
     path = tmp_path / "photo.jpg"
     image.save(path)
-    bundle = Fingerprinter(FingerprintConfig(tesseract_path="missing-tesseract")).fingerprint(path)
+    bundle = Fingerprinter().fingerprint(path)
     assert bundle.source_format == "jpeg"
 
     transparent = tmp_path / "transparent.png"
     Image.new("RGBA", (80, 80), (0, 0, 0, 0)).save(transparent)
-    bundle = Fingerprinter(FingerprintConfig(tesseract_path="missing-tesseract")).fingerprint(
-        transparent
-    )
+    bundle = Fingerprinter().fingerprint(transparent)
     assert bundle.quality.status == "insufficient_evidence"
     assert not bundle.page_hashes
 
@@ -98,23 +140,73 @@ def test_short_native_text_does_not_trigger_ocr(tmp_path: Path) -> None:
     """Keep valid short text without using text length as an OCR trigger."""
     path = tmp_path / "short.pdf"
     _pdf(path, "Short")
-    bundle = Fingerprinter(FingerprintConfig(tesseract_path="missing-tesseract")).fingerprint(path)
+    bundle = Fingerprinter().fingerprint(path)
     assert bundle.quality.pages[0].source == "native"
     assert not bundle.quality.pages[0].ocr_attempted
     assert bundle.quality.text_evidence == "exact_only"
 
 
-def test_low_confidence_ocr_is_not_text_evidence(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    """Keep uncertain OCR out of exact hashes and text lookup keys."""
-    path = tmp_path / "blank.pdf"
-    _pdf(path, "")
-    monkeypatch.setattr(ocr, "read_text", lambda *_args: ocr.OCRResult("imagined words", 5.0))
-    bundle = Fingerprinter().fingerprint(path)
-    assert bundle.quality.text_evidence == "none"
-    assert bundle.exact_hashes["canonical_sha256"] is None
-    assert bundle.quality.pages[0].warning == "OCR confidence was too low to use its text"
+def test_low_confidence_ocr_is_not_text_evidence() -> None:
+    """Keep uncertain OCR out of the page text and report why it was rejected."""
+    low = "OCR confidence was too low to use its text"
+    assert _accept_ocr("", "imagined words", 5.0, rasterized=False) == (None, low)
+    assert _accept_ocr("", "invoice total", 30.0, rasterized=False) == ("invoice total", None)
+    assert _accept_ocr("", "", None, rasterized=False) == (None, "OCR found no reliable text")
+    body = "header alpha beta gamma"
+    assert _accept_ocr("header", body, 60.0, rasterized=True) == (body, None)
+    unconfident = "OCR did not provide confident additional text"
+    assert _accept_ocr("header", body, 59.9, rasterized=True) == (None, unconfident)
+    assert _accept_ocr("header", "header alpha", 90.0, rasterized=True) == (None, unconfident)
+    assert _accept_ocr("header", "header", 90.0, rasterized=True) == (None, None)
+
+
+def test_ocr_models_are_resolved_before_fingerprinting(tmp_path: Path) -> None:
+    """Use bundled or configured models and reject missing ones at construction."""
+    bundled = FingerprintConfig()
+    assert ocr.model_directory(bundled) == Path(ocr.__file__).with_name("tessdata")
+    assert ocr.provenance(bundled)["ocr_models"].startswith("tessdata_fast@")
+    with pytest.raises(FingerprintError, match="tessdata_path"):
+        Fingerprinter(FingerprintConfig(ocr_language="klingon"))
+    with pytest.raises(FingerprintError, match="tessdata_path lacks"):
+        Fingerprinter(FingerprintConfig(tessdata_path=tmp_path))
+    (tmp_path / "eng.traineddata").touch()
+    custom = FingerprintConfig(tessdata_path=tmp_path)
+    assert ocr.model_directory(custom) == tmp_path.resolve()
+    assert ocr.provenance(custom)["ocr_models"] == "custom"
+
+
+def test_language_package_models_are_discovered(tmp_path: Path) -> None:
+    """Find docfgp-languages models, record their revision, and explain missing ones."""
+    env = _languages_package(
+        tmp_path,
+        "from pathlib import Path\n"
+        'TESSDATA = Path(__file__).with_name("tessdata")\n'
+        'REVISION = "0123456789abcdef0123456789abcdef01234567"\n',
+    )
+    package = tmp_path / "docfgp_languages"
+    (package / "tessdata").mkdir()
+    for name in ("eng", "ara"):
+        (package / "tessdata" / f"{name}.traineddata").touch()
+    code = (
+        "from docfgp import FingerprintConfig, ocr; "
+        "config = FingerprintConfig(ocr_language='eng+ara'); "
+        "print(ocr.model_directory(config)); print(ocr.provenance(config)['ocr_models'])"
+    )
+    directory, models = subprocess.check_output(
+        [sys.executable, "-c", code], env=env, text=True
+    ).split()
+    assert Path(directory) == package / "tessdata"
+    assert models == "tessdata_fast@0123456789abcdef0123456789abcdef01234567"
+    (package / "tessdata" / "ara.traineddata").unlink()
+    missing = subprocess.run(
+        [sys.executable, "-c", code], env=env, capture_output=True, text=True, check=False
+    )
+    assert "No installed OCR models for eng+ara" in missing.stderr
+    absent = _languages_package(tmp_path / "absent", "raise ImportError\n")
+    uninstalled = subprocess.run(
+        [sys.executable, "-c", code], env=absent, capture_output=True, text=True, check=False
+    )
+    assert 'require "docfgp[languages]"' in uninstalled.stderr
 
 
 def test_limits_and_invalid_input(tmp_path: Path) -> None:
@@ -147,7 +239,7 @@ def test_multipage_image_respects_frame_limit(tmp_path: Path) -> None:
     first = Image.new("RGB", (80, 80), "white")
     second = Image.new("RGB", (80, 80), "black")
     first.save(path, save_all=True, append_images=[second])
-    config = FingerprintConfig(tesseract_path="missing-tesseract")
+    config = FingerprintConfig()
     assert Fingerprinter(config).fingerprint(path).page_count == 2
     with pytest.raises(FingerprintError, match="max_pages"):
         Fingerprinter(FingerprintConfig(max_pages=1)).fingerprint(path)
@@ -176,7 +268,6 @@ def test_cli_matches_python(tmp_path: Path) -> None:
     assert "Cannot read document" in failure.stderr
 
 
-@pytest.mark.skipif(not os.environ.get("DOCFGP_TEST_TESSERACT"), reason="Tesseract not configured")
 def test_scanned_pdf_uses_tesseract(tmp_path: Path) -> None:
     """Recover searchable words from a PDF containing only a page image."""
     image_path = tmp_path / "scan.png"
@@ -185,14 +276,15 @@ def test_scanned_pdf_uses_tesseract(tmp_path: Path) -> None:
     document = canvas.Canvas(str(pdf_path), pagesize=(600, 250))
     document.drawImage(str(image_path), 0, 50, width=600, height=132)
     document.save()
-    config = FingerprintConfig(tesseract_path=os.environ["DOCFGP_TEST_TESSERACT"])
-    bundle = Fingerprinter(config).fingerprint(pdf_path)
+    bundle = Fingerprinter().fingerprint(pdf_path)
     assert bundle.quality.pages[0].source == "ocr"
     assert bundle.quality.pages[0].ocr_confidence is not None
     assert bundle.shingle_total > 0
+    latin = Fingerprinter(FingerprintConfig(ocr_language="script/Latin")).fingerprint(pdf_path)
+    assert latin.quality.pages[0].source == "ocr"
+    assert latin.parameters["ocr_engine"].startswith("tesseract-5.")
 
 
-@pytest.mark.skipif(not os.environ.get("DOCFGP_TEST_TESSERACT"), reason="Tesseract not configured")
 def test_rasterized_page_with_native_header_uses_ocr(tmp_path: Path) -> None:
     """Recognize substantial image text beneath a valid native header."""
     image_path = tmp_path / "body.png"
@@ -202,9 +294,7 @@ def test_rasterized_page_with_native_header_uses_ocr(tmp_path: Path) -> None:
     document.drawImage(str(image_path), 0, 50, width=600, height=132)
     document.drawString(20, 230, "Header")
     document.save()
-    bundle = Fingerprinter(
-        FingerprintConfig(tesseract_path=os.environ["DOCFGP_TEST_TESSERACT"])
-    ).fingerprint(path)
+    bundle = Fingerprinter().fingerprint(path)
     assert bundle.quality.pages[0].ocr_reason == "rasterized_content"
     assert bundle.quality.pages[0].source == "ocr"
     assert bundle.shingle_total > 0

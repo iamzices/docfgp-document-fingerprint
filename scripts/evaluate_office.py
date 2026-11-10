@@ -32,15 +32,13 @@ def main(argv: list[str] | None = None) -> int:
     """
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("corpus", type=Path, help="Business golden corpus directory")
-    parser.add_argument("--office2pdf", help="Converter executable")
-    parser.add_argument("--tesseract", help="OCR executable")
+    parser.add_argument("--tessdata", help="Tesseract language models")
     parser.add_argument("--top-k", type=int, default=10)
     args = parser.parse_args(argv)
     candidates, queries, truth = _golden(args.corpus)
     fingerprinter = Fingerprinter(
         FingerprintConfig(
-            office2pdf_path=args.office2pdf,
-            tesseract_path=args.tesseract,
+            tessdata_path=args.tessdata,
             include_shingle_counts=False,
         )
     )

@@ -14,9 +14,11 @@ DocFGP computes a `DocumentFingerprint` for PDF, DOCX, PPTX, PNG, JPEG, TIFF, BM
 
 Pages are processed in order. Native PDF text is used when it has word tokens and valid decoded characters. OCR is attempted when native text is missing or invalid, or when an embedded image covers at least half of a page. When an image-heavy page also has native text, OCR replaces that text if its mean recognized-word confidence is at least 60 and it contributes at least three new tokens. For missing or invalid native text, accepted OCR needs confidence of at least 30. Page quality records OCR attempts, results, and warnings. These thresholds are deterministic text-selection rules.
 
+OCR uses the models named by `ocr_language`, which defaults to English (`eng`). The package also includes the general Latin model (`script/Latin`) for other Latin-alphabet languages. The optional `docfgp[languages]` extra adds the models for every language written in a non-Latin script, such as `chi_sim` or `ara`, and `tessdata_path` selects a custom model directory. Creating a `Fingerprinter` with a missing model raises `FingerprintError`. `parameters` records the Tesseract version and model revision.
+
 ## Text representation
 
-Selected page text is normalized with Unicode NFKC, case folding, whitespace compaction, and joining of words divided by a line-break hyphen. Unicode word tokenization retains numbers. The **canonical text** is the ordered token sequence joined with spaces. A second representation removes punctuation and spacing from canonical text before character shingling. It tolerates some OCR spacing differences while retaining letters and digits.
+Selected page text is normalized with Unicode NFKC, case folding, whitespace compaction, and joining of words divided by a line-break hyphen. Unicode word tokenization retains numbers and combining marks. Scripts written without spaces between words, such as Chinese, Japanese, and Thai, yield one token per letter or digit. The **canonical text** is the ordered token sequence joined with spaces. A second representation removes punctuation and spacing from canonical text before character shingling. It tolerates some OCR spacing differences while retaining letters, digits, and combining marks.
 
 Reading order and OCR quality influence the token sequence. Canonical equality means that the *extracted and normalized tokens* match.
 
@@ -33,7 +35,7 @@ Reading order and OCR quality influence the token sequence. Canonical equality m
 | Passage anchors | Rightmost minimum word-shingle hash in each 32-shingle window | Retrieval of shared passages |
 | Page hashes | 64-bit perceptual hash per nonblank rendered page; four 16-bit lookup keys | Visual candidate retrieval |
 
-Exact hashes and text-feature identifiers use SHA-256 for stable values across Python processes. MinHash permutations are derived from fixed seed material. Empty feature sets yield empty sketches and lookup-key groups. The current result uses schema version `1.1` and algorithm version `1.3`; it also records feature parameters, per-page provenance, warnings, and a quality status.
+Exact hashes and text-feature identifiers use SHA-256 for stable values across Python processes. MinHash permutations are derived from fixed seed material. Empty feature sets yield empty sketches and lookup-key groups. The current result uses schema version `1.1` and algorithm version `1.4`; it also records feature parameters, per-page provenance, warnings, and a quality status.
 
 For two documents with word-shingle sets $S_A$ and $S_B$, the fraction of equal MinHash components estimates set Jaccard similarity:
 
@@ -58,8 +60,8 @@ Page perceptual hashes use a 32×32 grayscale discrete cosine transform. Their H
 
 ## Limits and reproducibility
 
-Default limits are 50 MB per file, 200 pages, 8 million decoded pixels per page, 2 million extracted characters, and 200,000 distinct word or character shingles. PDF rendering uses 96 DPI for page hashes and up to 180 DPI for OCR, subject to the pixel limit; standalone images retain their source dimensions within that limit. External processes have a 60-second timeout; the document has a 180-second cooperative deadline. Configuration can change these limits.
+Default limits are 50 MB per file, 200 pages, 8 million decoded pixels per page, 2 million extracted characters, and 200,000 distinct word or character shingles. PDF rendering uses 96 DPI for page hashes and up to 180 DPI for OCR, subject to the pixel limit; standalone images retain their source dimensions within that limit. Office conversion and OCR have a 60-second timeout; the document has a 180-second cooperative deadline. Configuration can change these limits.
 
-`quality.status` identifies the available text and visual evidence. `insufficient_evidence` retains the raw hash and has empty approximate lookup-key groups. Invalid documents and exceeded processing limits raise `FingerprintError`; OCR failure can leave a warning and a visual-only result. Temporary conversion and OCR files are removed after the call. The cooperative deadline is checked between in-process decoding stages; services accepting untrusted uploads should also apply operating-system resource limits.
+`quality.status` identifies the available text and visual evidence. `insufficient_evidence` retains the raw hash and has empty approximate lookup-key groups. Invalid documents and exceeded processing limits raise `FingerprintError`; OCR failure can leave a warning and a visual-only result. Temporary conversion files are removed after the call. The cooperative deadline is checked between in-process decoding stages; services accepting untrusted uploads should also apply operating-system resource limits.
 
 Fixed feature parameters and deterministic serialization support repeatable results. Changes in office2pdf, PDFium, Pillow, Tesseract, fonts, or OCR language can change extracted evidence, so experiments should record those versions and settings.

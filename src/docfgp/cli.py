@@ -20,8 +20,7 @@ def main(argv: list[str] | None = None) -> int:
     """
     parser = argparse.ArgumentParser(description="Fingerprint a document")
     parser.add_argument("path", help="PDF, DOCX, PPTX, or image path")
-    parser.add_argument("--office2pdf", help="Path to the office2pdf binary")
-    parser.add_argument("--tesseract", help="Path to the Tesseract binary")
+    parser.add_argument("--tessdata", help="Path to Tesseract language models")
     parser.add_argument("--ocr-language", default="eng", help="Installed Tesseract language codes")
     parser.add_argument(
         "--max-document-seconds", type=float, default=180.0, help="Processing deadline in seconds"
@@ -32,8 +31,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     try:
         config = FingerprintConfig(
-            office2pdf_path=args.office2pdf,
-            tesseract_path=args.tesseract,
+            tessdata_path=args.tessdata,
             ocr_language=args.ocr_language,
             max_document_seconds=args.max_document_seconds,
             include_shingle_counts=not args.no_shingle_counts,

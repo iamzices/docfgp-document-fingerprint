@@ -20,6 +20,7 @@ jobs:
           python-version: "3.x"
       - run: pipx install poetry
       - run: poetry install
+      - run: poetry run python -m scripts.fetch_models
       - run: poetry run ruff check .
       - run: poetry run ruff format --check .
       - run: poetry run mypy
@@ -37,27 +38,56 @@ jobs:
           python-version: ${{ matrix.python }}
       - run: pipx install poetry
       - run: poetry install
-      - run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends tesseract-ocr tesseract-ocr-eng
+      - run: poetry run python -m scripts.fetch_models
+      - run: poetry run maturin develop --release
       - run: poetry run python -m pytest -q
-        env:
-          DOCFGP_TEST_TESSERACT: /usr/bin/tesseract
+
+  build:
+    if: github.event_name == 'release'
+    needs: [lint, test]
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - { os: ubuntu-latest, target: x86_64 }
+          - { os: ubuntu-24.04-arm, target: aarch64 }
+          - { os: macos-latest, target: aarch64 }
+          - { os: macos-latest, target: x86_64 }
+          - { os: windows-latest, target: x64 }
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.x"
+      - run: python -m scripts.fetch_models
+      - uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.target }}
+          manylinux: "2_28"
+          args: --release --locked --out dist
+      - if: matrix.os == 'ubuntu-latest'
+        uses: PyO3/maturin-action@v1
+        with:
+          command: sdist
+          args: --out dist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}-${{ matrix.target }}
+          path: dist
 
   publish:
     if: github.event_name == 'release'
-    needs: [lint, test]
+    needs: [build]
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
       contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-python@v7
+      - uses: actions/download-artifact@v4
         with:
-          python-version: "3.x"
-      - run: pipx install poetry
-      - run: poetry build
+          pattern: dist-*
+          path: dist
+          merge-multiple: true
       - uses: pypa/gh-action-pypi-publish@release/v1
 

@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import contextlib
 import math
-import shutil
 import subprocess
+import sys
 import tempfile
 import unicodedata
 import zipfile
@@ -99,7 +99,7 @@ def pdf_path(
     Args:
         path: Original path.
         source_format: Identified input format.
-        config: Converter path and timeout.
+        config: Converter timeout and output limit.
         deadline: Cooperative document deadline.
 
     Yields:
@@ -112,21 +112,20 @@ def pdf_path(
         _remaining_seconds(deadline)
         yield path
         return
-    configured = config.office2pdf_path
-    executable = (
-        str(Path(configured).expanduser().resolve())
-        if configured and Path(configured).expanduser().is_file()
-        else shutil.which(configured or "office2pdf")
-    )
-    if not executable:
-        raise FingerprintError("office2pdf is required for DOCX and PPTX")
     with tempfile.TemporaryDirectory(prefix="docfgp-office-") as directory:
         output = Path(directory) / "converted.pdf"
         error_path = Path(directory) / "converter.stderr"
         try:
             with error_path.open("wb") as errors:
                 result = subprocess.run(
-                    [executable, str(path.resolve()), "-o", str(output)],
+                    [
+                        sys.executable,
+                        "-P",
+                        "-m",
+                        "docfgp._office",
+                        str(path.resolve()),
+                        str(output),
+                    ],
                     cwd=directory,
                     stdout=subprocess.DEVNULL,
                     stderr=errors,

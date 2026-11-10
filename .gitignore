@@ -8,3 +8,7 @@ __pycache__/
 .ruff_cache/
 dist/
 *.egg-info/
+target/
+*.so
+*.pyd
+*.traineddata
