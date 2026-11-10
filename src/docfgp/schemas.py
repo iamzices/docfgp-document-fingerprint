@@ -42,10 +42,9 @@ class FingerprintConfig:
         max_features: Maximum distinct word or character shingles.
         render_dpi: Visual rendering resolution, bounded by max_page_pixels.
         ocr_dpi: OCR rendering resolution, bounded by max_page_pixels.
-        process_timeout: Seconds allowed for each external process.
+        process_timeout: Seconds allowed for each conversion or OCR call.
         max_document_seconds: Cooperative deadline checked between processing stages.
-        office2pdf_path: Optional explicit converter executable.
-        tesseract_path: Optional explicit OCR executable.
+        tessdata_path: Optional directory of Tesseract language models.
         ocr_language: Installed Tesseract language codes.
         include_shingle_counts: Include sorted exact occurrence counts.
     """
@@ -59,8 +58,7 @@ class FingerprintConfig:
     ocr_dpi: int = 180
     process_timeout: float = 60.0
     max_document_seconds: float = 180.0
-    office2pdf_path: str | Path | None = None
-    tesseract_path: str | Path | None = None
+    tessdata_path: str | Path | None = None
     ocr_language: str = "eng"
     include_shingle_counts: bool = True
 
@@ -96,12 +94,10 @@ class FingerprintConfig:
             raise ValueError("Rendering resolution cannot exceed 300 DPI")
         if not isinstance(self.ocr_language, str) or not self.ocr_language.strip():
             raise ValueError("ocr_language must not be empty")
-        for name in ("office2pdf_path", "tesseract_path"):
-            value = getattr(self, name)
-            if value is not None:
-                if not isinstance(value, (str, Path)):
-                    raise ValueError(f"{name} must be a path")
-                object.__setattr__(self, name, str(value))
+        if self.tessdata_path is not None:
+            if not isinstance(self.tessdata_path, (str, Path)):
+                raise ValueError("tessdata_path must be a path")
+            object.__setattr__(self, "tessdata_path", str(self.tessdata_path))
 
 
 @dataclass(frozen=True)

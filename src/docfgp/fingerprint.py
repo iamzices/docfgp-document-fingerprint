@@ -28,7 +28,7 @@ from .visual import page_phash, visual_keys
 from .winnowing import anchors
 
 SCHEMA_VERSION = "1.1"
-ALGORITHM_VERSION = "1.3"
+ALGORITHM_VERSION = "1.4"
 WORD_SHINGLE_SIZE = 5
 CHAR_SHINGLE_SIZE = 13
 ANCHOR_WINDOW = 32
@@ -51,6 +51,22 @@ def _raw_hash(path: Path, deadline: float) -> str:
 def _shingles(tokens: tuple[str, ...]) -> Iterator[str]:
     for index in range(len(tokens) - WORD_SHINGLE_SIZE + 1):
         yield stable_digest("\x1f".join(tokens[index : index + WORD_SHINGLE_SIZE]).encode("utf-8"))
+
+
+def _accept_ocr(
+    native: str, recognized: str, confidence: float | None, *, rasterized: bool
+) -> tuple[str | None, str | None]:
+    """Return OCR text that meets the confidence rules, or a warning explaining its rejection."""
+    if not recognized or confidence is None:
+        return None, "OCR found no reliable text"
+    if rasterized:
+        novel = set(word_tokens(recognized)) - set(word_tokens(native))
+        if confidence >= OCR_REPLACEMENT_CONFIDENCE and len(novel) >= 3:
+            return recognized, None
+        return None, "OCR did not provide confident additional text" if novel else None
+    if confidence >= OCR_MIN_CONFIDENCE:
+        return recognized, None
+    return None, "OCR confidence was too low to use its text"
 
 
 def _assemble_fingerprint(
@@ -155,6 +171,7 @@ def _assemble_fingerprint(
             "render_dpi": config.render_dpi,
             "ocr_dpi": config.ocr_dpi,
             "ocr_language": config.ocr_language,
+            **ocr.provenance(config),
             "ocr_min_confidence": OCR_MIN_CONFIDENCE,
             "ocr_replacement_confidence": OCR_REPLACEMENT_CONFIDENCE,
             "raster_ocr_coverage": extract.RASTER_OCR_COVERAGE,
@@ -171,12 +188,16 @@ class Fingerprinter:
     """
 
     def __init__(self, config: FingerprintConfig | None = None) -> None:
-        """Store immutable processing limits.
+        """Store immutable processing limits after confirming the OCR models exist.
 
         Args:
             config: Optional processing settings.
+
+        Raises:
+            FingerprintError: A configured OCR model is not installed.
         """
         self.config = config or FingerprintConfig()
+        ocr.model_directory(self.config)
 
     def fingerprint(self, path: str | Path) -> DocumentFingerprint:
         """Create a document's textual and visual fingerprint.
@@ -221,21 +242,15 @@ class Fingerprinter:
                         try:
                             result = ocr.read_text(ocr_image, self.config, deadline)
                             confidence = result.confidence
-                            recognized = strict_text(result.text)
-                            if not recognized or confidence is None:
-                                warning = "OCR found no reliable text"
-                            elif page.ocr_reason == "rasterized_content":
-                                novel = set(word_tokens(recognized)) - set(word_tokens(native))
-                                if confidence >= OCR_REPLACEMENT_CONFIDENCE and len(novel) >= 3:
-                                    extracted = recognized
-                                    source = "ocr"
-                                elif novel:
-                                    warning = "OCR did not provide confident additional text"
-                            elif confidence >= OCR_MIN_CONFIDENCE:
-                                extracted = recognized
+                            accepted, warning = _accept_ocr(
+                                native,
+                                strict_text(result.text),
+                                confidence,
+                                rasterized=page.ocr_reason == "rasterized_content",
+                            )
+                            if accepted:
+                                extracted = accepted
                                 source = "ocr"
-                            else:
-                                warning = "OCR confidence was too low to use its text"
                         except FingerprintError as exc:
                             warning = str(exc)
                     if warning:

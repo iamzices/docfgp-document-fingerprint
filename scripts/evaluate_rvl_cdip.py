@@ -85,7 +85,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--split", choices=("validation", "test"), default="validation")
     parser.add_argument("--dataset", default="stefan-hf/rvlcdip-duplicates")
     parser.add_argument("--revision", help="Optional pinned Hugging Face dataset revision")
-    parser.add_argument("--tesseract", help="Tesseract executable for scanned-image text")
+    parser.add_argument("--tessdata", help="Tesseract language models for scanned-image text")
     parser.add_argument("--top-k", type=int, default=10)
     args = parser.parse_args(argv)
     try:
@@ -101,7 +101,7 @@ def main(argv: list[str] | None = None) -> int:
     pairs = load_dataset(args.dataset, "pairs", split=args.split, **options)
     queries, positives, negatives, excluded = _judgments(documents, pairs, args.images_root)
     fingerprinter = Fingerprinter(
-        FingerprintConfig(tesseract_path=args.tesseract, include_shingle_counts=False)
+        FingerprintConfig(tessdata_path=args.tessdata, include_shingle_counts=False)
     )
     report = evaluate(
         _training_images(args.train_labels, args.images_root),

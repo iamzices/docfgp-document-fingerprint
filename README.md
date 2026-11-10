@@ -16,13 +16,13 @@ DocFGP creates text and visual fingerprints for finding duplicates, near-duplica
 ## Requirements
 
 - Python 3.11+
-- [office2pdf](https://github.com/developer0hye/office2pdf)
-- [Tesseract 5](https://github.com/tesseract-ocr/tesseract)
+- Linux (x86_64, aarch64), macOS, or Windows (x64)
 
 ## Installation
 
 ```bash
 pip install docfgp
+pip install "docfgp[languages]"  # OCR for non-Latin scripts
 ```
 
 ## Python API

@@ -22,6 +22,17 @@ def test_normalization_preserves_numbers_and_joins_hyphenation() -> None:
     assert strict_text("first-\n\nsecond") == "first- second"
 
 
+def test_tokens_follow_the_word_spacing_of_each_script() -> None:
+    """Keep combining marks within words and split unspaced scripts by character."""
+    hindi = strict_text("हिन्दी में दस्तावेज")
+    assert word_tokens(hindi) == ("हिन्दी", "में", "दस्तावेज")
+    assert tolerant_text(hindi) == "हिन्दीमेंदस्तावेज"
+    mixed = strict_text("Revenue 本季度 iPhone")
+    assert word_tokens(mixed) == ("revenue", "本", "季", "度", "iphone")
+    assert word_tokens("ภาษาไทย ๑๒") == ("ภ", "า", "ษ", "า", "ไ", "ท", "ย", "๑", "๒")
+    assert word_tokens("ཀུན་མཁྱེན") == ("ཀུ", "ན", "མ", "ཁྱེ", "ན")
+
+
 def test_minhash_and_band_keys_are_stable_across_processes() -> None:
     """Keep sketches independent of input order and Python hash seeds."""
     values = sketch(["alpha", "beta", "alpha", "gamma"])

@@ -1,10 +1,10 @@
 [build-system]
-requires = ["poetry-core>=2.2"]
-build-backend = "poetry.core.masonry.api"
+requires = ["maturin>=1.9,<2"]
+build-backend = "maturin"
 
 [project]
 name = "docfgp"
-version = "0.1.1"
+version = "0.2.0"
 description = "DocFGP is a Python library that fingerprints documents to find duplicates."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -15,19 +15,26 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
-dependencies = ["pypdfium2>=4.30,<6", "Pillow>=10,<14"]
+dependencies = ["pypdfium2>=4.30,<6", "Pillow>=10,<14", "regex>=2024.11.6", "tesserocr>=2.12,<3"]
 
 [project.optional-dependencies]
 benchmark = ["psutil>=6", "datasets>=3,<5"]
+languages = ["docfgp-languages>=1,<2"]
 
 [project.scripts]
 docfgp = "docfgp.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.11", "mypy>=1.15", "psutil>=6", "reportlab>=4"]
+dev = ["pytest>=8", "ruff>=0.11", "mypy>=1.15", "psutil>=6", "reportlab>=4", "maturin>=1.9,<2"]
 
 [tool.poetry.dependencies]
 python = ">=3.11,<4"
+
+[tool.maturin]
+python-source = "src"
+module-name = "docfgp._native"
+features = ["pyo3/extension-module"]
+include = [{ path = "src/docfgp/tessdata/**/*.traineddata", format = ["sdist", "wheel"] }]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
