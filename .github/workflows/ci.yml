@@ -2,10 +2,14 @@ name: CI
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
   pull_request:
   release:
     types: [published]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name != 'release' }}
 
 permissions:
   contents: read
@@ -20,11 +24,9 @@ jobs:
           python-version: "3.x"
       - run: pipx install poetry
       - run: poetry install
-      - run: poetry run python -m scripts.fetch_models
       - run: poetry run ruff check .
       - run: poetry run ruff format --check .
       - run: poetry run mypy
-      - run: poetry build
 
   test:
     runs-on: ubuntu-latest
@@ -36,10 +38,12 @@ jobs:
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
+      - uses: Swatinem/rust-cache@v2
       - run: pipx install poetry
-      - run: poetry install
+      - run: poetry install --no-root
       - run: poetry run python -m scripts.fetch_models
-      - run: poetry run maturin develop --release
+      - run: poetry run maturin build --locked --out dist
+      - run: poetry run pip install dist/*.whl
       - run: poetry run python -m pytest -q
 
   build:
