@@ -4,11 +4,11 @@ build-backend = "maturin"
 
 [project]
 name = "docfgp"
-version = "0.2.0"
+version = "0.3.0"
 description = "DocFGP is a Python library that fingerprints documents to find duplicates."
 readme = "README.md"
 requires-python = ">=3.11"
-license = "MIT"
+license = "Apache-2.0"
 license-files = ["LICENSE"]
 keywords = ["document", "fingerprint", "minhash", "pdf"]
 classifiers = [
