@@ -151,7 +151,10 @@ def _render(page: pdfium.PdfPage, dpi: int, config: FingerprintConfig) -> Image.
     width, height = page.get_size()
     if not (math.isfinite(width) and math.isfinite(height) and width > 0 and height > 0):
         raise FingerprintError("Invalid PDF page geometry")
-    scale = min(dpi / 72, math.sqrt(config.max_page_pixels / (width * height)))
+    # Largest scale whose ceil-rounded render still fits max_page_pixels.
+    area, perimeter = width * height, width + height
+    pixels = config.max_page_pixels - 1
+    scale = min(dpi / 72, (math.sqrt(perimeter**2 + 4 * area * pixels) - perimeter) / (2 * area))
     if scale <= 0:
         raise FingerprintError("PDF page exceeds rendering limits")
     image = page.render(scale=scale).to_pil()
