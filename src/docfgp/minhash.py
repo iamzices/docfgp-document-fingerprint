@@ -5,6 +5,8 @@ from __future__ import annotations
 import hashlib
 from collections.abc import Iterable
 
+from ._native import minhash
+
 COMPONENTS = 512
 BANDS = 32
 ROWS = 16
@@ -55,18 +57,13 @@ def sketch(features: Iterable[str]) -> tuple[str, ...]:
     Returns:
         Fixed-width hexadecimal values, or an empty tuple without features.
     """
-    minima = [_PRIME] * COMPONENTS
-    seen: set[str] = set()
-    for feature in features:
-        if feature in seen:
-            continue
-        seen.add(feature)
-        x = int.from_bytes(hashlib.sha256(feature.encode("utf-8")).digest()[:8], "big") % _PRIME
-        for index, (a, b) in enumerate(_COEFFICIENTS):
-            value = (a * x + b) % _PRIME
-            if value < minima[index]:
-                minima[index] = value
-    return tuple(f"{value:016x}" for value in minima) if seen else ()
+    values = {
+        int.from_bytes(hashlib.sha256(feature.encode("utf-8")).digest()[:8], "big") % _PRIME
+        for feature in features
+    }
+    if not values:
+        return ()
+    return tuple(f"{value:016x}" for value in minhash(list(values), _COEFFICIENTS))
 
 
 def band_keys(values: tuple[str, ...], namespace: str) -> tuple[str, ...]:
