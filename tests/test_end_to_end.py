@@ -137,6 +137,22 @@ def test_image_metadata_and_transparency(tmp_path: Path) -> None:
     assert not bundle.page_hashes
 
 
+def test_pdf_line_break_hyphen_joins_word(tmp_path: Path) -> None:
+    """Match a word hyphenated across lines with the same word unbroken."""
+    wrapped = tmp_path / "wrapped.pdf"
+    document = canvas.Canvas(str(wrapped))
+    lines = document.beginText(72, 720)
+    lines.textLine("alpha beta inter-")
+    lines.textLine("national gamma delta")
+    document.drawText(lines)
+    document.save()
+    single = tmp_path / "single.pdf"
+    _pdf(single, "alpha beta international gamma delta")
+    fingerprinter = Fingerprinter()
+    hashes = [fingerprinter.fingerprint(path).exact_hashes for path in (wrapped, single)]
+    assert hashes[0]["canonical_sha256"] == hashes[1]["canonical_sha256"]
+
+
 def test_short_native_text_does_not_trigger_ocr(tmp_path: Path) -> None:
     """Keep valid short text without using text length as an OCR trigger."""
     path = tmp_path / "short.pdf"

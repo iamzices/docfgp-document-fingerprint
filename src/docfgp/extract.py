@@ -220,7 +220,8 @@ def pdf_pages(
             try:
                 textpage = page.get_textpage()
                 try:
-                    text = textpage.get_text_range()
+                    # pdfium replaces a hyphen at a line break with U+FFFE.
+                    text = textpage.get_text_range().replace("\ufffe", "")
                 finally:
                     textpage.close()
                 reason = _ocr_reason(page, text)

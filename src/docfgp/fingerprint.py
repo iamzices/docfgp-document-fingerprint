@@ -28,7 +28,7 @@ from .visual import page_phash, visual_keys
 from .winnowing import anchors
 
 SCHEMA_VERSION = "2.0"
-ALGORITHM_VERSION = "1.5"
+ALGORITHM_VERSION = "1.6"
 WORD_SHINGLE_SIZE = 5
 CHAR_SHINGLE_SIZE = 13
 ANCHOR_WINDOW = 32
