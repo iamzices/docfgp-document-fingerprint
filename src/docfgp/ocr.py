@@ -15,7 +15,7 @@ from pathlib import Path
 import tesserocr
 from PIL import Image
 
-from .schemas import FingerprintConfig, FingerprintError, _remaining_seconds
+from .schemas import FingerprintConfig, FingerprintError, remaining_seconds
 
 _TESSDATA = Path(__file__).with_name("tessdata")
 _MANIFEST = json.loads((_TESSDATA / "models.json").read_text(encoding="utf-8"))
@@ -179,7 +179,7 @@ class Reader:
         Raises:
             FingerprintError: Tesseract models are missing, or Tesseract times out or fails.
         """
-        timeout = min(self.config.process_timeout, _remaining_seconds(deadline))
+        timeout = min(self.config.process_timeout, remaining_seconds(deadline))
         try:
             if self._api is None:
                 directory, models, _, _ = _resolve(self.config)
@@ -191,7 +191,7 @@ class Reader:
                 )
             self._api.SetImage(image)
             completed = self._api.Recognize(timeout=math.ceil(timeout * 1000))
-            _remaining_seconds(deadline)
+            remaining_seconds(deadline)
             if not completed:
                 raise FingerprintError("Tesseract could not complete within process_timeout")
             text = self._api.GetUTF8Text()

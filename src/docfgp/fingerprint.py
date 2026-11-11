@@ -22,7 +22,7 @@ from .schemas import (
     Quality,
     QualityStatus,
     TextEvidence,
-    _remaining_seconds,
+    remaining_seconds,
 )
 from .visual import page_phash, visual_keys
 from .winnowing import anchors
@@ -41,7 +41,7 @@ def _raw_hash(path: Path, deadline: float) -> str:
     try:
         with path.open("rb") as stream:
             for chunk in iter(lambda: stream.read(1024 * 1024), b""):
-                _remaining_seconds(deadline)
+                remaining_seconds(deadline)
                 digest.update(chunk)
     except OSError as exc:
         raise FingerprintError(f"Cannot hash document: {exc}") from exc
@@ -106,19 +106,19 @@ def _assemble_fingerprint(
     counts: Counter[str] = Counter()
     for value in _shingles(tokens):
         if len(word_hashes) % 4096 == 0:
-            _remaining_seconds(deadline)
+            remaining_seconds(deadline)
         word_hashes.append(value)
         counts[value] += 1
     word_sketch = sketch(counts)
-    _remaining_seconds(deadline)
+    remaining_seconds(deadline)
     characters = tolerant_text(canonical)
     char_features = set()
     for index in range(len(characters) - CHAR_SHINGLE_SIZE + 1):
         if index % 4096 == 0:
-            _remaining_seconds(deadline)
+            remaining_seconds(deadline)
         char_features.add(feature_digest(characters[index : index + CHAR_SHINGLE_SIZE].encode()))
     char_sketch = sketch(char_features)
-    _remaining_seconds(deadline)
+    remaining_seconds(deadline)
     passage_anchors = anchors(word_hashes, ANCHOR_WINDOW)
     visual_lookup = tuple(sorted({key for page in page_hashes for key in page.lookup_keys}))
     if word_sketch:
@@ -226,7 +226,7 @@ class Fingerprinter:
         deadline = time.monotonic() + self.config.max_document_seconds
         source = Path(path).expanduser()
         source_format, byte_size = extract.identify(source, self.config)
-        _remaining_seconds(deadline)
+        remaining_seconds(deadline)
         raw_sha256 = _raw_hash(source, deadline)
         page_text: list[str] = []
         page_hashes: list[PageHash] = []
@@ -241,7 +241,7 @@ class Fingerprinter:
                 visual = page.visual
                 ocr_image = page.ocr_image
                 try:
-                    _remaining_seconds(deadline)
+                    remaining_seconds(deadline)
                     native = strict_text(page.native_text)
                     extracted = "" if page.ocr_reason == "invalid_native_text" else native
                     source: PageSource = "native" if extracted else "none"
@@ -282,7 +282,7 @@ class Fingerprinter:
                             warning=warning,
                         )
                     )
-                    _remaining_seconds(deadline)
+                    remaining_seconds(deadline)
                 except (OSError, ValueError) as exc:
                     raise FingerprintError(f"Cannot process page {page_number}: {exc}") from exc
                 finally:

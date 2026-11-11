@@ -18,7 +18,7 @@ import pypdfium2 as pdfium
 from PIL import Image
 
 from .normalize import strict_text, word_tokens
-from .schemas import FingerprintConfig, FingerprintError, OCRReason, _remaining_seconds
+from .schemas import FingerprintConfig, FingerprintError, OCRReason, remaining_seconds
 from .visual import normalized_grayscale
 
 _IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
@@ -114,7 +114,7 @@ def pdf_path(
         FingerprintError: Conversion fails or produces invalid output.
     """
     if source_format == "pdf":
-        _remaining_seconds(deadline)
+        remaining_seconds(deadline)
         yield path
         return
     with tempfile.TemporaryDirectory(prefix="docfgp-office-") as directory:
@@ -134,13 +134,13 @@ def pdf_path(
                     cwd=directory,
                     stdout=subprocess.DEVNULL,
                     stderr=errors,
-                    timeout=min(config.process_timeout, _remaining_seconds(deadline)),
+                    timeout=min(config.process_timeout, remaining_seconds(deadline)),
                     check=False,
                 )
         except (OSError, subprocess.TimeoutExpired) as exc:
-            _remaining_seconds(deadline)
+            remaining_seconds(deadline)
             raise FingerprintError(f"office2pdf could not complete: {exc}") from exc
-        _remaining_seconds(deadline)
+        remaining_seconds(deadline)
         if result.returncode or not output.is_file():
             with error_path.open("rb") as errors:
                 message = errors.read(500).decode("utf-8", "replace").strip()
@@ -237,7 +237,7 @@ def pdf_pages(
         if count == 0 or count > config.max_pages:
             raise FingerprintError("PDF has no pages or exceeds max_pages")
         for index in range(count):
-            _remaining_seconds(deadline)
+            remaining_seconds(deadline)
             try:
                 page = document[index]
             except Exception as exc:
@@ -295,7 +295,7 @@ def image_pages(
             if frames > config.max_pages:
                 raise FingerprintError("Image exceeds max_pages")
             for index in range(frames):
-                _remaining_seconds(deadline)
+                remaining_seconds(deadline)
                 image.seek(index)
                 if image.width * image.height > config.max_image_pixels:
                     raise FingerprintError("Image frame exceeds max_image_pixels")

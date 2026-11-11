@@ -23,7 +23,18 @@ class FingerprintError(Exception):
     """Report invalid input, unavailable dependencies, or incomplete processing."""
 
 
-def _remaining_seconds(deadline: float) -> float:
+def remaining_seconds(deadline: float) -> float:
+    """Return the time left before a document deadline.
+
+    Args:
+        deadline: Deadline on the `time.monotonic` clock.
+
+    Returns:
+        Positive seconds remaining.
+
+    Raises:
+        FingerprintError: The deadline has passed.
+    """
     remaining = deadline - time.monotonic()
     if remaining <= 0:
         raise FingerprintError("Document exceeded max_document_seconds")
