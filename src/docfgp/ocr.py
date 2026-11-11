@@ -15,7 +15,6 @@ import tesserocr
 from PIL import Image
 
 from .schemas import FingerprintConfig, FingerprintError, _remaining_seconds
-from .visual import normalized_grayscale
 
 _TESSDATA = Path(__file__).with_name("tessdata")
 _MANIFEST = json.loads((_TESSDATA / "models.json").read_text(encoding="utf-8"))
@@ -143,7 +142,7 @@ def read_text(image: Image.Image, config: FingerprintConfig, deadline: float) ->
     """Extract text from a rendered page with the bundled Tesseract library.
 
     Args:
-        image: Page image within configured pixel limits.
+        image: Page image from `normalized_grayscale` within configured pixel limits.
         config: OCR models, language, and timeout settings.
         deadline: Cooperative document deadline.
 
@@ -156,16 +155,13 @@ def read_text(image: Image.Image, config: FingerprintConfig, deadline: float) ->
     directory, models, _, _ = _resolve(config)
     timeout = min(config.process_timeout, _remaining_seconds(deadline))
     try:
-        with (
-            tesserocr.PyTessBaseAPI(
-                path=f"{directory}{os.sep}",
-                lang=models,
-                psm=tesserocr.PSM.AUTO,
-                variables={"debug_file": os.devnull},
-            ) as api,
-            normalized_grayscale(image) as prepared,
-        ):
-            api.SetImage(prepared)
+        with tesserocr.PyTessBaseAPI(
+            path=f"{directory}{os.sep}",
+            lang=models,
+            psm=tesserocr.PSM.AUTO,
+            variables={"debug_file": os.devnull},
+        ) as api:
+            api.SetImage(image)
             completed = api.Recognize(timeout=math.ceil(timeout * 1000))
             _remaining_seconds(deadline)
             if not completed:

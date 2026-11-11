@@ -18,34 +18,33 @@ def normalized_grayscale(image: Image.Image) -> Image.Image:
     """Apply orientation and transparency before visual analysis.
 
     Args:
-        image: One decoded page or image frame.
+        image: One decoded page or image frame, oriented in place.
 
     Returns:
         Grayscale image with transparent pixels composited on white.
     """
-    with ImageOps.exif_transpose(image) as oriented:
-        if oriented.mode in {"RGBA", "LA"} or "transparency" in oriented.info:
-            with oriented.convert("RGBA") as rgba, Image.new("RGBA", rgba.size, "white") as white:
-                with Image.alpha_composite(white, rgba) as composited:
-                    return composited.convert("L")
-        return oriented.convert("L")
+    ImageOps.exif_transpose(image, in_place=True)
+    if image.mode in {"RGBA", "LA"} or "transparency" in image.info:
+        with image.convert("RGBA") as rgba, Image.new("RGBA", rgba.size, "white") as white:
+            with Image.alpha_composite(white, rgba) as composited:
+                return composited.convert("L")
+    return image.convert("L")
 
 
 def page_phash(image: Image.Image) -> str | None:
-    """Hash a nonblank page after consistent visual normalization.
+    """Hash a nonblank page.
 
     Args:
-        image: One decoded page or image frame.
+        image: One page or image frame from `normalized_grayscale`.
 
     Returns:
         A 64-bit hash as 16 hexadecimal digits, or None for a blank page.
     """
-    with normalized_grayscale(image) as grayscale:
-        low, high = cast(tuple[int, int], grayscale.getextrema())
-        if high - low < 5:
-            return None
-        with grayscale.resize((32, 32), Image.Resampling.LANCZOS) as reduced:
-            pixels = list(reduced.tobytes())
+    low, high = cast(tuple[int, int], image.getextrema())
+    if high - low < 5:
+        return None
+    with image.resize((32, 32), Image.Resampling.LANCZOS) as reduced:
+        pixels = list(reduced.tobytes())
     rows = [pixels[offset : offset + 32] for offset in range(0, 1024, 32)]
     horizontal = [
         [sum(row[x] * _COSINES[u][x] for x in range(32)) for u in range(8)] for row in rows

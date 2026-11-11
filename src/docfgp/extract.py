@@ -18,6 +18,7 @@ from PIL import Image
 
 from .normalize import strict_text, word_tokens
 from .schemas import FingerprintConfig, FingerprintError, OCRReason, _remaining_seconds
+from .visual import normalized_grayscale
 
 _IMAGE_SUFFIXES = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".webp"}
 _IMAGE_FORMATS = {"PNG", "JPEG", "TIFF", "BMP", "WEBP"}
@@ -27,7 +28,7 @@ RASTER_OCR_COVERAGE = 0.5
 
 @dataclass(frozen=True)
 class ExtractedPage:
-    """Carry one page's native text, image renders, and OCR trigger."""
+    """Carry one page's native text, grayscale renders, and OCR trigger."""
 
     number: int
     native_text: str
@@ -163,7 +164,8 @@ def _render(page: pdfium.PdfPage, dpi: int, config: FingerprintConfig) -> Image.
     if image.width * image.height > config.max_page_pixels:
         image.close()
         raise FingerprintError("PDF page exceeds max_page_pixels")
-    return image
+    with image:
+        return normalized_grayscale(image)
 
 
 def _ocr_reason(page: pdfium.PdfPage, text: str) -> OCRReason | None:
@@ -273,8 +275,9 @@ def image_pages(
                 image.seek(index)
                 if image.width * image.height > config.max_image_pixels:
                     raise FingerprintError("Image frame exceeds max_image_pixels")
-                frame = image.copy()
-                yield ExtractedPage(index + 1, "", frame, frame, "image_input")
+                with image.copy() as frame:
+                    grayscale = normalized_grayscale(frame)
+                yield ExtractedPage(index + 1, "", grayscale, grayscale, "image_input")
     except FingerprintError:
         raise
     except Exception as exc:
