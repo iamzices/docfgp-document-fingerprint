@@ -27,6 +27,7 @@ def _fetch(url: str, target: Path, sha256: str) -> None:
     target.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.NamedTemporaryFile(dir=target.parent, delete=False) as stream:
         partial = Path(stream.name)
+
     try:
         with urllib.request.urlopen(url, timeout=60) as response, partial.open("wb") as output:
             for chunk in iter(lambda: response.read(1024 * 1024), b""):
@@ -51,13 +52,16 @@ def main(argv: list[str] | None = None) -> int:
     """
     argparse.ArgumentParser(description=__doc__).parse_args(argv)
     manifest = json.loads((TESSDATA / "models.json").read_text(encoding="utf-8"))
+
     for name, model in manifest["models"].items():
         target = TESSDATA / f"{name}.traineddata"
         if target.is_file() and _digest(target) == model["sha256"]:
             continue
+
         url = RAW_URL.format(revision=manifest["revision"], name=f"{name}.traineddata")
         _fetch(url, target, model["sha256"])
         print(target)
+
     return 0
 
 

@@ -28,7 +28,8 @@ def strict_text(text: str) -> str:
     text = unicodedata.normalize("NFKC", text)
     text = _HYPHENATION.sub("", text)
     text = text.replace("\u00ad", "")
-    return _WHITESPACE.sub(" ", text).strip().casefold()
+    text = _WHITESPACE.sub(" ", text)
+    return text.strip().casefold()
 
 
 def word_tokens(text: str) -> tuple[str, ...]:
@@ -55,4 +56,8 @@ def tolerant_text(text: str) -> str:
     Returns:
         Alphanumeric Unicode characters and combining marks, including digits.
     """
-    return "".join(ch for ch in text if ch.isalnum() or unicodedata.category(ch).startswith("M"))
+    return "".join(character for character in text if _is_letter_digit_or_mark(character))
+
+
+def _is_letter_digit_or_mark(character: str) -> bool:
+    return character.isalnum() or unicodedata.category(character).startswith("M")

@@ -28,7 +28,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--no-shingle-counts", action="store_true", help="Omit precise overlap counts"
     )
+
     args = parser.parse_args(argv)
+
     try:
         config = FingerprintConfig(
             tessdata_path=args.tessdata,

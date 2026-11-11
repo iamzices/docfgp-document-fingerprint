@@ -2,26 +2,20 @@
 
 from __future__ import annotations
 
+import functools
 import hashlib
 from collections.abc import Iterable
 
-from ._native import minhash
+from ._native import minhash as _native_minhash
 
 COMPONENTS = 512
 BANDS = 32
 ROWS = 16
 _PRIME = (1 << 61) - 1
-
-
-def _coefficients(index: int) -> tuple[int, int]:
-    # Derive every permutation from bytes, independent of Python's random module.
-    digest = hashlib.sha256(b"docfgp-minhash-v2" + index.to_bytes(2, "big")).digest()
-    return int.from_bytes(digest[:8], "big") % (_PRIME - 1) + 1, int.from_bytes(
-        digest[8:16], "big"
-    ) % _PRIME
-
-
-_COEFFICIENTS = tuple(_coefficients(index) for index in range(COMPONENTS))
+_PERMUTATION_SEED = b"docfgp-minhash-v2"
+_UINT64_BYTES = 8
+_BAND_KEY_VERSION = "v2"
+_BAND_DIGEST_CHARS = 24
 
 
 def stable_digest(data: bytes) -> str:
@@ -45,7 +39,7 @@ def feature_digest(data: bytes) -> str:
     Returns:
         Lowercase hexadecimal digest.
     """
-    return hashlib.blake2b(data, digest_size=8).hexdigest()
+    return hashlib.blake2b(data, digest_size=_UINT64_BYTES).hexdigest()
 
 
 def sketch(features: Iterable[str]) -> tuple[str, ...]:
@@ -57,13 +51,12 @@ def sketch(features: Iterable[str]) -> tuple[str, ...]:
     Returns:
         Fixed-width hexadecimal values, or an empty tuple without features.
     """
-    values = {
-        int.from_bytes(hashlib.sha256(feature.encode("utf-8")).digest()[:8], "big") % _PRIME
-        for feature in features
-    }
+    values = {_field_element(feature) for feature in features}
     if not values:
         return ()
-    return tuple(f"{value:016x}" for value in minhash(list(values), _COEFFICIENTS))
+
+    minima = _native_minhash(list(values), _permutations())
+    return tuple(f"{minimum:016x}" for minimum in minima)
 
 
 def band_keys(values: tuple[str, ...], namespace: str) -> tuple[str, ...]:
@@ -83,8 +76,28 @@ def band_keys(values: tuple[str, ...], namespace: str) -> tuple[str, ...]:
         return ()
     if len(values) != COMPONENTS:
         raise ValueError("A banded sketch must contain 512 components")
+
     keys = []
     for band in range(BANDS):
-        data = "".join(values[band * ROWS : (band + 1) * ROWS]).encode()
-        keys.append(f"{namespace}:v2:{band:02d}:{stable_digest(data)[:24]}")
+        rows = "".join(values[band * ROWS : (band + 1) * ROWS]).encode()
+        digest = stable_digest(rows)[:_BAND_DIGEST_CHARS]
+        keys.append(f"{namespace}:{_BAND_KEY_VERSION}:{band:02d}:{digest}")
     return tuple(keys)
+
+
+def _field_element(feature: str) -> int:
+    digest = hashlib.sha256(feature.encode("utf-8")).digest()
+    return int.from_bytes(digest[:_UINT64_BYTES], "big") % _PRIME
+
+
+@functools.cache
+def _permutations() -> tuple[tuple[int, int], ...]:
+    # Derived from fixed bytes, so sketches never depend on Python's random module.
+    return tuple(_permutation(index) for index in range(COMPONENTS))
+
+
+def _permutation(index: int) -> tuple[int, int]:
+    digest = hashlib.sha256(_PERMUTATION_SEED + index.to_bytes(2, "big")).digest()
+    multiplier = int.from_bytes(digest[:_UINT64_BYTES], "big") % (_PRIME - 1) + 1
+    offset = int.from_bytes(digest[_UINT64_BYTES : 2 * _UINT64_BYTES], "big") % _PRIME
+    return multiplier, offset

@@ -4,13 +4,18 @@ from __future__ import annotations
 
 import math
 import statistics
+from collections.abc import Sequence
 from typing import cast
 
 from PIL import Image, ImageOps
 
+_DCT_SIZE = 32
+_KEPT_FREQUENCIES = 8
+_MIN_BLANK_CONTRAST = 5
+_KEY_CHUNKS = 4
 _COSINES = tuple(
-    tuple(math.cos(math.pi * (2 * x + 1) * frequency / 64) for x in range(32))
-    for frequency in range(8)
+    tuple(math.cos(math.pi * (2 * x + 1) * frequency / (2 * _DCT_SIZE)) for x in range(_DCT_SIZE))
+    for frequency in range(_KEPT_FREQUENCIES)
 )
 
 
@@ -24,11 +29,15 @@ def normalized_grayscale(image: Image.Image) -> Image.Image:
         Grayscale image with transparent pixels composited on white.
     """
     ImageOps.exif_transpose(image, in_place=True)
-    if image.mode in {"RGBA", "LA"} or "transparency" in image.info:
-        with image.convert("RGBA") as rgba, Image.new("RGBA", rgba.size, "white") as white:
-            with Image.alpha_composite(white, rgba) as composited:
-                return composited.convert("L")
-    return image.convert("L")
+
+    if image.mode not in {"RGBA", "LA"} and "transparency" not in image.info:
+        return image.convert("L")
+    with (
+        image.convert("RGBA") as rgba,
+        Image.new("RGBA", rgba.size, "white") as background,
+        Image.alpha_composite(background, rgba) as composited,
+    ):
+        return composited.convert("L")
 
 
 def page_phash(image: Image.Image) -> str | None:
@@ -40,32 +49,54 @@ def page_phash(image: Image.Image) -> str | None:
     Returns:
         A 64-bit hash as 16 hexadecimal digits, or None for a blank page.
     """
-    low, high = cast(tuple[int, int], image.getextrema())
-    if high - low < 5:
+    darkest, lightest = cast(tuple[int, int], image.getextrema())
+    if lightest - darkest < _MIN_BLANK_CONTRAST:
         return None
-    with image.resize((32, 32), Image.Resampling.LANCZOS) as reduced:
+
+    with image.resize((_DCT_SIZE, _DCT_SIZE), Image.Resampling.LANCZOS) as reduced:
         pixels = list(reduced.tobytes())
-    rows = [pixels[offset : offset + 32] for offset in range(0, 1024, 32)]
-    horizontal = [
-        [sum(row[x] * _COSINES[u][x] for x in range(32)) for u in range(8)] for row in rows
-    ]
-    coefficients = [
-        sum(horizontal[y][u] * _COSINES[v][y] for y in range(32))
-        for v in range(8)
-        for u in range(8)
-    ]
+
+    coefficients = _low_frequency_dct(pixels)
+
+    # The DC coefficient is left out of the median, as in the standard pHash.
     median = statistics.median(coefficients[1:])
-    bits = sum(1 << index for index, value in enumerate(coefficients) if value > median)
+    bits = 0
+    for index, coefficient in enumerate(coefficients):
+        if coefficient > median:
+            bits |= 1 << index
     return f"{bits:016x}"
 
 
-def visual_keys(value: str) -> tuple[str, ...]:
+def visual_keys(phash: str) -> tuple[str, ...]:
     """Split a 64-bit page hash into four indexed chunks.
 
     Args:
-        value: Page hash returned by `page_phash`.
+        phash: Page hash returned by `page_phash`.
 
     Returns:
         Four versioned lookup keys.
     """
-    return tuple(f"visual:v1:{index}:{value[index * 4 : (index + 1) * 4]}" for index in range(4))
+    width = len(phash) // _KEY_CHUNKS
+    return tuple(
+        f"visual:v1:{chunk}:{phash[chunk * width : (chunk + 1) * width]}"
+        for chunk in range(_KEY_CHUNKS)
+    )
+
+
+def _low_frequency_dct(pixels: list[int]) -> list[float]:
+    # A separable 2-D DCT: transform every row, then the columns of the kept frequencies.
+    row_frequencies = []
+    for row_start in range(0, _DCT_SIZE * _DCT_SIZE, _DCT_SIZE):
+        row = pixels[row_start : row_start + _DCT_SIZE]
+        row_frequencies.append([_dot(row, _COSINES[u]) for u in range(_KEPT_FREQUENCIES)])
+
+    coefficients = []
+    for v in range(_KEPT_FREQUENCIES):
+        for u in range(_KEPT_FREQUENCIES):
+            column = [row_frequencies[y][u] for y in range(_DCT_SIZE)]
+            coefficients.append(_dot(column, _COSINES[v]))
+    return coefficients
+
+
+def _dot(values: Sequence[float], weights: Sequence[float]) -> float:
+    return sum(value * weight for value, weight in zip(values, weights, strict=True))

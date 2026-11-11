@@ -1,11 +1,12 @@
-"""Versioned public schemas and processing limits for document fingerprints."""
+"""Public result schemas, processing limits, and the errors they raise."""
 
 from __future__ import annotations
 
+import contextlib
 import json
 import math
 import time
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
@@ -18,30 +19,14 @@ OCRReason = Literal[
     "missing_native_text", "invalid_native_text", "rasterized_content", "image_input"
 ]
 
+_MAX_DPI = 300
+
 
 class FingerprintError(Exception):
     """Report invalid input, unavailable dependencies, or incomplete processing."""
 
 
-def remaining_seconds(deadline: float) -> float:
-    """Return the time left before a document deadline.
-
-    Args:
-        deadline: Deadline on the `time.monotonic` clock.
-
-    Returns:
-        Positive seconds remaining.
-
-    Raises:
-        FingerprintError: The deadline has passed.
-    """
-    remaining = deadline - time.monotonic()
-    if remaining <= 0:
-        raise FingerprintError("Document exceeded max_document_seconds")
-    return remaining
-
-
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class FingerprintConfig:
     """Configure bounded document processing.
 
@@ -79,7 +64,7 @@ class FingerprintConfig:
         Raises:
             ValueError: A limit or resolution is invalid.
         """
-        values = (
+        counts = (
             self.max_file_bytes,
             self.max_pages,
             self.max_page_pixels,
@@ -88,21 +73,16 @@ class FingerprintConfig:
             self.render_dpi,
             self.ocr_dpi,
         )
-        durations = (self.process_timeout, self.max_document_seconds)
-        if any(
-            not isinstance(value, int) or isinstance(value, bool) or value <= 0 for value in values
-        ):
+        if not all(_is_positive_int(count) for count in counts):
             raise ValueError("All integer processing limits must be positive")
-        if any(
-            isinstance(value, bool)
-            or not isinstance(value, (int, float))
-            or not math.isfinite(value)
-            or value <= 0
-            for value in durations
-        ):
+
+        durations = (self.process_timeout, self.max_document_seconds)
+        if not all(_is_positive_number(seconds) for seconds in durations):
             raise ValueError("All processing limits must be positive")
-        if self.render_dpi > 300 or self.ocr_dpi > 300:
+
+        if max(self.render_dpi, self.ocr_dpi) > _MAX_DPI:
             raise ValueError("Rendering resolution cannot exceed 300 DPI")
+
         if not isinstance(self.ocr_language, str) or not self.ocr_language.strip():
             raise ValueError("ocr_language must not be empty")
         if self.tessdata_path is not None:
@@ -111,7 +91,7 @@ class FingerprintConfig:
             object.__setattr__(self, "tessdata_path", str(self.tessdata_path))
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PageQuality:
     """Record extraction provenance for one page or image frame."""
 
@@ -125,7 +105,7 @@ class PageQuality:
     warning: str | None = None
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Quality:
     """State whether the fingerprint carries text, visual, or insufficient evidence."""
 
@@ -135,7 +115,7 @@ class Quality:
     warnings: tuple[str, ...] = ()
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class PageHash:
     """Store a page perceptual hash and its indexed visual keys."""
 
@@ -144,7 +124,7 @@ class PageHash:
     lookup_keys: tuple[str, ...]
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class DocumentFingerprint:
     """Serializable, versioned document fingerprint."""
 
@@ -190,12 +170,12 @@ class DocumentFingerprint:
             "lookup_keys": {name: list(keys) for name, keys in self.lookup_keys.items()},
             "minhash": list(self.minhash),
             "char_minhash": list(self.char_minhash),
-            "shingle_counts": [[value, count] for value, count in self.shingle_counts],
+            "shingle_counts": [[shingle, count] for shingle, count in self.shingle_counts],
             "shingle_total": self.shingle_total,
             "shingle_unique": self.shingle_unique,
             "page_hashes": [
-                {"page": item.page, "phash": item.phash, "lookup_keys": list(item.lookup_keys)}
-                for item in self.page_hashes
+                {"page": page.page, "phash": page.phash, "lookup_keys": list(page.lookup_keys)}
+                for page in self.page_hashes
             ],
             "quality": {
                 "status": self.quality.status,
@@ -225,3 +205,98 @@ class DocumentFingerprint:
             JSON string.
         """
         return json.dumps(self.to_dict(), ensure_ascii=False, separators=(",", ":"))
+
+
+@dataclass(frozen=True, slots=True)
+class Box:
+    """Axis-aligned pixel rectangle on a rendered page."""
+
+    left: int
+    top: int
+    right: int
+    bottom: int
+
+    def contains_center_of(self, other: Box) -> bool:
+        """Return whether the center of another box lies inside or on this box.
+
+        Args:
+            other: Box whose center is tested.
+
+        Returns:
+            True when the center is within this box's edges.
+        """
+        x = (other.left + other.right) / 2
+        y = (other.top + other.bottom) / 2
+        return self.left <= x <= self.right and self.top <= y <= self.bottom
+
+
+class Deadline:
+    """Track a cooperative processing deadline on the monotonic clock.
+
+    Args:
+        seconds: Time allowed from now.
+    """
+
+    def __init__(self, seconds: float) -> None:
+        """Start counting down.
+
+        Args:
+            seconds: Time allowed from now.
+        """
+        self._end = time.monotonic() + seconds
+
+    def remaining(self) -> float:
+        """Return the time left.
+
+        Returns:
+            Positive seconds remaining.
+
+        Raises:
+            FingerprintError: The deadline has passed.
+        """
+        remaining = self._end - time.monotonic()
+        if remaining <= 0:
+            raise FingerprintError("Document exceeded max_document_seconds")
+        return remaining
+
+    def check(self) -> None:
+        """Stop processing once the deadline has passed.
+
+        Raises:
+            FingerprintError: The deadline has passed.
+        """
+        self.remaining()
+
+
+@contextlib.contextmanager
+def converted_errors(action: str) -> Iterator[None]:
+    """Report any failure inside the block as a `FingerprintError`.
+
+    Args:
+        action: What the block does, used as the message prefix.
+
+    Yields:
+        Control to the guarded block.
+
+    Raises:
+        FingerprintError: The block failed; existing `FingerprintError`s pass unchanged.
+    """
+    try:
+        yield
+    except FingerprintError:
+        raise
+    except Exception as exc:
+        raise FingerprintError(f"{action}: {exc}") from exc
+
+
+def _is_positive_int(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool) and value > 0
+
+
+def _is_positive_number(value: object) -> bool:
+    return (
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and value > 0
+    )

@@ -18,15 +18,19 @@ def anchors(hashes: Sequence[str], window: int = 32) -> tuple[str, ...]:
     """
     if not hashes:
         return ()
+
     window = max(1, window)
-    queue: deque[int] = deque()
+    first_full_window_end = min(window, len(hashes)) - 1
+    # Indexes of hashes that can still become a window minimum, in increasing hash order.
+    candidates: deque[int] = deque()
     selected: dict[str, None] = {}
-    for index, value in enumerate(hashes):
-        while queue and hashes[queue[-1]] >= value:
-            queue.pop()
-        queue.append(index)
-        while queue and queue[0] <= index - window:
-            queue.popleft()
-        if index >= min(window, len(hashes)) - 1:
-            selected.setdefault(hashes[queue[0]], None)
+
+    for index, shingle_hash in enumerate(hashes):
+        while candidates and hashes[candidates[-1]] >= shingle_hash:
+            candidates.pop()
+        candidates.append(index)
+        while candidates[0] <= index - window:
+            candidates.popleft()
+        if index >= first_full_window_end:
+            selected.setdefault(hashes[candidates[0]], None)
     return tuple(selected)

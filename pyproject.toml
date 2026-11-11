@@ -45,10 +45,20 @@ target-version = "py311"
 extend-exclude = [".tools"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "D"]
-ignore = ["D203", "D213", "D413"]
+select = ["E", "F", "I", "B", "UP", "D", "C90", "N", "SIM", "RET", "C4", "PL", "FBT", "PT", "PERF"]
+ignore = ["D203", "D213", "D413", "SIM905"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["PLR2004"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 8
+
+[tool.ruff.lint.pylint]
+max-args = 5
 
 [tool.mypy]
 python_version = "3.11"
+strict = true
 files = ["src/docfgp", "scripts"]
 ignore_missing_imports = true
