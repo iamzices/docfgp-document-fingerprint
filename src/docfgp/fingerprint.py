@@ -234,9 +234,7 @@ class Fingerprinter:
         warnings: list[str] = []
         total_text_chars = 0
 
-        def consume(
-            pages: Iterable[extract.ExtractedPage],
-        ) -> None:
+        def consume(pages: Iterable[extract.ExtractedPage], reader: ocr.Reader) -> None:
             nonlocal total_text_chars
             for page in pages:
                 page_number = page.number
@@ -252,7 +250,7 @@ class Fingerprinter:
                     confidence = None
                     if ocr_image is not None:
                         try:
-                            result = ocr.read_text(ocr_image, self.config, deadline)
+                            result = reader.read_text(ocr_image, deadline)
                             accepted, confidence, warning = _accept_ocr(
                                 result,
                                 page.native_bounds,
@@ -292,13 +290,14 @@ class Fingerprinter:
                     if ocr_image is not None and ocr_image is not visual:
                         ocr_image.close()
 
-        if source_format not in {"pdf", "docx", "pptx"}:
-            with closing(extract.image_pages(source, self.config, deadline)) as image_frames:
-                consume(image_frames)
-        else:
-            with extract.pdf_path(source, source_format, self.config, deadline) as pdf:
-                with closing(extract.pdf_pages(pdf, self.config, deadline)) as pdf_frames:
-                    consume(pdf_frames)
+        with closing(ocr.Reader(self.config)) as reader:
+            if source_format not in {"pdf", "docx", "pptx"}:
+                with closing(extract.image_pages(source, self.config, deadline)) as image_frames:
+                    consume(image_frames, reader)
+            else:
+                with extract.pdf_path(source, source_format, self.config, deadline) as pdf:
+                    with closing(extract.pdf_pages(pdf, self.config, deadline)) as pdf_frames:
+                        consume(pdf_frames, reader)
 
         return _assemble_fingerprint(
             " ".join(page_text),

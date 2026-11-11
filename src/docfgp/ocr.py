@@ -150,58 +150,81 @@ def provenance(config: FingerprintConfig) -> dict[str, str]:
     }
 
 
-def read_text(image: Image.Image, config: FingerprintConfig, deadline: float) -> OCRResult:
-    """Extract text from a rendered page with the bundled Tesseract library.
+class Reader:
+    """Recognize the pages of one document, loading the OCR models on first use.
 
     Args:
-        image: Page image from `normalized_grayscale` within configured pixel limits.
         config: OCR models, language, and timeout settings.
-        deadline: Cooperative document deadline.
-
-    Returns:
-        Text, words, and Tesseract word confidence from the same OCR invocation.
-
-    Raises:
-        FingerprintError: Tesseract models are missing, or Tesseract times out or fails.
     """
-    directory, models, _, _ = _resolve(config)
-    timeout = min(config.process_timeout, _remaining_seconds(deadline))
-    try:
-        with tesserocr.PyTessBaseAPI(
-            path=f"{directory}{os.sep}",
-            lang=models,
-            psm=tesserocr.PSM.AUTO,
-            variables={"debug_file": os.devnull},
-        ) as api:
-            api.SetImage(image)
-            completed = api.Recognize(timeout=math.ceil(timeout * 1000))
+
+    def __init__(self, config: FingerprintConfig) -> None:
+        """Store the settings without loading models.
+
+        Args:
+            config: OCR models, language, and timeout settings.
+        """
+        self.config = config
+        self._api: tesserocr.PyTessBaseAPI | None = None
+
+    def read_text(self, image: Image.Image, deadline: float) -> OCRResult:
+        """Extract text from a rendered page with the bundled Tesseract library.
+
+        Args:
+            image: Page image from `normalized_grayscale` within configured pixel limits.
+            deadline: Cooperative document deadline.
+
+        Returns:
+            Text, words, and Tesseract word confidence from the same OCR invocation.
+
+        Raises:
+            FingerprintError: Tesseract models are missing, or Tesseract times out or fails.
+        """
+        timeout = min(self.config.process_timeout, _remaining_seconds(deadline))
+        try:
+            if self._api is None:
+                directory, models, _, _ = _resolve(self.config)
+                self._api = tesserocr.PyTessBaseAPI(
+                    path=f"{directory}{os.sep}",
+                    lang=models,
+                    psm=tesserocr.PSM.AUTO,
+                    variables={"debug_file": os.devnull},
+                )
+            self._api.SetImage(image)
+            completed = self._api.Recognize(timeout=math.ceil(timeout * 1000))
             _remaining_seconds(deadline)
             if not completed:
                 raise FingerprintError("Tesseract could not complete within process_timeout")
-            text = api.GetUTF8Text()
-            confidence_data = api.GetTSVText(0)
-    except RuntimeError as exc:
-        raise FingerprintError(f"Tesseract failed: {exc}") from exc
-    if len(text.encode()) > config.max_text_chars * 4:
-        raise FingerprintError("Tesseract produced oversized text")
-    if len(confidence_data.encode()) > config.max_text_chars * 16:
-        raise FingerprintError("Tesseract produced oversized confidence data")
-    words = []
-    try:
-        for row in csv.DictReader(
-            io.StringIO(confidence_data, newline=""), _TSV_FIELDS, delimiter="\t"
-        ):
-            if row["level"] != "5" or not row["text"].strip():
-                continue
-            confidence = float(row["conf"])
-            if math.isfinite(confidence) and confidence >= 0:
-                left, top = int(row["left"]), int(row["top"])
-                right, bottom = left + int(row["width"]), top + int(row["height"])
-                line = (int(row["block_num"]), int(row["par_num"]), int(row["line_num"]))
-                words.append(OCRWord(row["text"], confidence, (left, top, right, bottom), line))
-    except (KeyError, ValueError, TypeError, AttributeError) as exc:
-        raise FingerprintError(f"Cannot read Tesseract confidence data: {exc}") from exc
-    return OCRResult(text, mean_confidence(words) if words else None, tuple(words))
+            text = self._api.GetUTF8Text()
+            confidence_data = self._api.GetTSVText(0)
+        except RuntimeError as exc:
+            raise FingerprintError(f"Tesseract failed: {exc}") from exc
+        if len(text.encode()) > self.config.max_text_chars * 4:
+            raise FingerprintError("Tesseract produced oversized text")
+        if len(confidence_data.encode()) > self.config.max_text_chars * 16:
+            raise FingerprintError("Tesseract produced oversized confidence data")
+        words = []
+        try:
+            for row in csv.DictReader(
+                io.StringIO(confidence_data, newline=""), _TSV_FIELDS, delimiter="\t"
+            ):
+                if row["level"] != "5" or not row["text"].strip():
+                    continue
+                confidence = float(row["conf"])
+                if math.isfinite(confidence) and confidence >= 0:
+                    left, top = int(row["left"]), int(row["top"])
+                    right, bottom = left + int(row["width"]), top + int(row["height"])
+                    line = (int(row["block_num"]), int(row["par_num"]), int(row["line_num"]))
+                    bounds = (left, top, right, bottom)
+                    words.append(OCRWord(row["text"], confidence, bounds, line))
+        except (KeyError, ValueError, TypeError, AttributeError) as exc:
+            raise FingerprintError(f"Cannot read Tesseract confidence data: {exc}") from exc
+        return OCRResult(text, mean_confidence(words) if words else None, tuple(words))
+
+    def close(self) -> None:
+        """Release the loaded OCR models."""
+        if self._api is not None:
+            self._api.End()
+            self._api = None
 
 
 def mean_confidence(words: Sequence[OCRWord]) -> float:
