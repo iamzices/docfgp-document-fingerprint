@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pypdfium2 as pdfium
-from PIL import Image, UnidentifiedImageError
+from PIL import Image
 
 from .normalize import strict_text, word_tokens
 from .schemas import FingerprintConfig, FingerprintError, OCRReason, _remaining_seconds
@@ -84,7 +84,9 @@ def identify(path: Path, config: FingerprintConfig) -> tuple[str, int]:
                 if image_format not in _IMAGE_FORMATS:
                     raise FingerprintError("Unsupported image format")
                 image.verify()
-        except (OSError, UnidentifiedImageError, ValueError) as exc:
+        except FingerprintError:
+            raise
+        except Exception as exc:
             raise FingerprintError(f"Invalid image: {exc}") from exc
         return image_format.lower(), size
     raise FingerprintError("Unsupported format or file signature")
@@ -273,5 +275,7 @@ def image_pages(
                     raise FingerprintError("Image frame exceeds max_page_pixels")
                 frame = image.copy()
                 yield ExtractedPage(index + 1, "", frame, frame, "image_input")
-    except (OSError, UnidentifiedImageError) as exc:
+    except FingerprintError:
+        raise
+    except Exception as exc:
         raise FingerprintError(f"Cannot decode image: {exc}") from exc
