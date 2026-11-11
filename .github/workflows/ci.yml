@@ -23,7 +23,7 @@ jobs:
         with:
           python-version: "3.x"
       - run: pipx install poetry
-      - run: poetry install
+      - run: poetry install --no-root
       - run: poetry run ruff check .
       - run: poetry run ruff format --check .
       - run: poetry run mypy
