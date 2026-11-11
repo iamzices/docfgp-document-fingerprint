@@ -91,8 +91,6 @@ def _assemble_fingerprint(
             _remaining_seconds(deadline)
         word_hashes.append(value)
         counts[value] += 1
-        if len(counts) > config.max_features:
-            raise FingerprintError("Word shingles exceed max_features")
     word_sketch = sketch(counts)
     _remaining_seconds(deadline)
     characters = tolerant_text(canonical)
@@ -101,8 +99,6 @@ def _assemble_fingerprint(
         if index % 4096 == 0:
             _remaining_seconds(deadline)
         char_features.add(feature_digest(characters[index : index + CHAR_SHINGLE_SIZE].encode()))
-        if len(char_features) > config.max_features:
-            raise FingerprintError("Character shingles exceed max_features")
     char_sketch = sketch(char_features)
     _remaining_seconds(deadline)
     passage_anchors = anchors(word_hashes, ANCHOR_WINDOW)

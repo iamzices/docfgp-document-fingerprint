@@ -39,7 +39,6 @@ class FingerprintConfig:
         max_pages: Maximum PDF pages or image frames.
         max_page_pixels: Maximum pixels decoded for one page or image.
         max_text_chars: Maximum total extracted characters.
-        max_features: Maximum distinct word or character shingles.
         render_dpi: Visual rendering resolution, bounded by max_page_pixels.
         ocr_dpi: OCR rendering resolution, bounded by max_page_pixels.
         process_timeout: Seconds allowed for each conversion or OCR call.
@@ -53,7 +52,6 @@ class FingerprintConfig:
     max_pages: int = 200
     max_page_pixels: int = 8_000_000
     max_text_chars: int = 2_000_000
-    max_features: int = 200_000
     render_dpi: int = 96
     ocr_dpi: int = 180
     process_timeout: float = 60.0
@@ -73,7 +71,6 @@ class FingerprintConfig:
             self.max_pages,
             self.max_page_pixels,
             self.max_text_chars,
-            self.max_features,
             self.render_dpi,
             self.ocr_dpi,
         )
