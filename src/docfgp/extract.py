@@ -271,8 +271,8 @@ def image_pages(
             for index in range(frames):
                 _remaining_seconds(deadline)
                 image.seek(index)
-                if image.width * image.height > config.max_page_pixels:
-                    raise FingerprintError("Image frame exceeds max_page_pixels")
+                if image.width * image.height > config.max_image_pixels:
+                    raise FingerprintError("Image frame exceeds max_image_pixels")
                 frame = image.copy()
                 yield ExtractedPage(index + 1, "", frame, frame, "image_input")
     except FingerprintError:

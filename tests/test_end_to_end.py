@@ -274,8 +274,8 @@ def test_limits_and_invalid_input(tmp_path: Path) -> None:
         Fingerprinter().fingerprint(invalid)
     image = tmp_path / "large.png"
     Image.new("RGB", (101, 101)).save(image)
-    with pytest.raises(FingerprintError, match="max_page_pixels"):
-        Fingerprinter(FingerprintConfig(max_page_pixels=10_000)).fingerprint(image)
+    with pytest.raises(FingerprintError, match="max_image_pixels"):
+        Fingerprinter(FingerprintConfig(max_image_pixels=10_000)).fingerprint(image)
     office = tmp_path / "broken.docx"
     with zipfile.ZipFile(office, "w") as archive:
         archive.writestr("[Content_Types].xml", "<Types/>")

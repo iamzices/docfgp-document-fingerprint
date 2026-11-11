@@ -37,7 +37,8 @@ class FingerprintConfig:
     Attributes:
         max_file_bytes: Maximum original input size.
         max_pages: Maximum PDF pages or image frames.
-        max_page_pixels: Maximum pixels decoded for one page or image.
+        max_page_pixels: Maximum pixels rendered for one PDF page.
+        max_image_pixels: Maximum pixels decoded for one image frame.
         max_text_chars: Maximum total extracted characters.
         render_dpi: Visual rendering resolution, bounded by max_page_pixels.
         ocr_dpi: OCR rendering resolution, bounded by max_page_pixels.
@@ -51,6 +52,7 @@ class FingerprintConfig:
     max_file_bytes: int = 50_000_000
     max_pages: int = 200
     max_page_pixels: int = 8_000_000
+    max_image_pixels: int = 40_000_000
     max_text_chars: int = 2_000_000
     render_dpi: int = 96
     ocr_dpi: int = 180
@@ -70,6 +72,7 @@ class FingerprintConfig:
             self.max_file_bytes,
             self.max_pages,
             self.max_page_pixels,
+            self.max_image_pixels,
             self.max_text_chars,
             self.render_dpi,
             self.ocr_dpi,

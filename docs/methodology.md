@@ -60,7 +60,7 @@ Page perceptual hashes use a 32×32 grayscale discrete cosine transform. Their H
 
 ## Limits and reproducibility
 
-Default limits are 50 MB per file, 200 pages, 8 million decoded pixels per page, and 2 million extracted characters. PDF rendering uses 96 DPI for page hashes and up to 180 DPI for OCR, subject to the pixel limit; standalone images retain their source dimensions within that limit. Office conversion and OCR have a 60-second timeout; the document has a 180-second cooperative deadline. Configuration can change these limits.
+Default limits are 50 MB per file, 200 pages, 8 million rendered pixels per PDF page, 40 million decoded pixels per image, and 2 million extracted characters. PDF rendering uses 96 DPI for page hashes and up to 180 DPI for OCR, subject to the page pixel limit; standalone images retain their source dimensions within the image pixel limit. Office conversion and OCR have a 60-second timeout; the document has a 180-second cooperative deadline. Configuration can change these limits.
 
 `quality.status` identifies the available text and visual evidence. `insufficient_evidence` retains the raw hash and has empty approximate lookup-key groups. Invalid documents and exceeded processing limits raise `FingerprintError`; OCR failure can leave a warning and a visual-only result. Temporary conversion files are removed after the call. The cooperative deadline is checked between in-process decoding stages; services accepting untrusted uploads should also apply operating-system resource limits.
 
