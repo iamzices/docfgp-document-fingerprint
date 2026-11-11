@@ -175,6 +175,43 @@ def test_ocr_models_are_resolved_before_fingerprinting(tmp_path: Path) -> None:
     assert ocr.provenance(custom)["ocr_models"] == "custom"
 
 
+def test_latin_alphabet_codes_fall_back_to_script_latin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Use script/Latin for a Latin-alphabet code only when no installed model has that code."""
+    german = FingerprintConfig(ocr_language="eng+deu")
+    assert ocr.provenance(german)["ocr_language"] == "eng+script/Latin"
+    for name in ("eng", "deu"):
+        (tmp_path / f"{name}.traineddata").touch()
+    monkeypatch.setattr(ocr, "_language_models", lambda: ((tmp_path, "0" * 40),))
+    assert ocr.provenance(german)["ocr_language"] == "eng+deu"
+
+
+def test_models_from_both_packages_load_together(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Load script/Latin from the base package with a docfgp-languages model."""
+    (tmp_path / "ara.traineddata").touch()
+    monkeypatch.setattr(ocr, "_language_models", lambda: ((tmp_path, "0" * 40),))
+    config = FingerprintConfig(ocr_language="deu+ara")
+    bundled = Path(ocr.__file__).with_name("tessdata")
+    assert ocr.model_directory(config) == Path(os.path.commonpath([bundled, tmp_path]))
+    assert ocr.provenance(config)["ocr_language"] == "script/Latin+ara"
+
+
+def test_model_paths_that_tesseract_would_skip_are_rejected(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Reject a combined model path that Tesseract would skip for its leading ~."""
+    for model in ("base/script/Latin", "~languages/ara"):
+        (tmp_path / f"{model}.traineddata").parent.mkdir(parents=True)
+        (tmp_path / f"{model}.traineddata").touch()
+    monkeypatch.setattr(ocr, "_TESSDATA", tmp_path / "base")
+    monkeypatch.setattr(ocr, "_language_models", lambda: ((tmp_path / "~languages", "0" * 40),))
+    with pytest.raises(FingerprintError, match="cannot load together"):
+        Fingerprinter(FingerprintConfig(ocr_language="deu+ara"))
+
+
 def test_language_package_models_are_discovered(tmp_path: Path) -> None:
     """Find docfgp-languages models, record their revision, and explain missing ones."""
     env = _languages_package(
@@ -280,8 +317,9 @@ def test_scanned_pdf_uses_tesseract(tmp_path: Path) -> None:
     assert bundle.quality.pages[0].source == "ocr"
     assert bundle.quality.pages[0].ocr_confidence is not None
     assert bundle.shingle_total > 0
-    latin = Fingerprinter(FingerprintConfig(ocr_language="script/Latin")).fingerprint(pdf_path)
+    latin = Fingerprinter(FingerprintConfig(ocr_language="deu")).fingerprint(pdf_path)
     assert latin.quality.pages[0].source == "ocr"
+    assert latin.parameters["ocr_language"] == "script/Latin"
     assert latin.parameters["ocr_engine"].startswith("tesseract-5.")
 
 

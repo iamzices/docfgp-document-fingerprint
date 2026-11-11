@@ -19,6 +19,11 @@ from .visual import normalized_grayscale
 
 _TESSDATA = Path(__file__).with_name("tessdata")
 _MANIFEST = json.loads((_TESSDATA / "models.json").read_text(encoding="utf-8"))
+_LATIN_LANGUAGES = frozenset(
+    "afr aze bos bre cat ceb ces cos cym dan deu epo est eus fao fil fin fra fry gla gle glg hat "
+    "hrv hun ind isl ita jav lat lav lit ltz mlt mri msa nld nor oci pol por que ron slk slv spa "
+    "sqi srp_latn sun swa swe ton tur uzb yor".split()
+)
 _TSV_FIELDS = (
     "level",
     "page_num",
@@ -56,36 +61,60 @@ def _holds(directory: Path, names: list[str]) -> bool:
     return all((directory / f"{name}.traineddata").is_file() for name in names)
 
 
-def _resolve(config: FingerprintConfig) -> tuple[Path, str]:
+def _directories() -> tuple[tuple[Path, str], ...]:
+    return ((_TESSDATA, _MANIFEST["revision"]), *_language_models())
+
+
+def _holders(model: str) -> list[tuple[Path, str]]:
+    return [found for found in _directories() if _holds(found[0], [model])]
+
+
+def _resolve(config: FingerprintConfig) -> tuple[Path, str, str, str]:
     names = config.ocr_language.split("+")
     if config.tessdata_path is not None:
         custom = Path(config.tessdata_path).expanduser().resolve()
         if not _holds(custom, names):
             raise FingerprintError(f"tessdata_path lacks models for {config.ocr_language}")
-        return custom, "custom"
-    for directory, revision in ((_TESSDATA, _MANIFEST["revision"]), *_language_models()):
-        if _holds(directory, names):
-            return directory, f"tessdata_fast@{revision}"
-    if _language_models():
+        return custom, config.ocr_language, config.ocr_language, "custom"
+    holders = {}
+    for name in names:
+        model = "script/Latin" if name in _LATIN_LANGUAGES and not _holders(name) else name
+        holders[model] = _holders(model)
+    if not all(holders.values()):
+        if _language_models():
+            raise FingerprintError(
+                f"No installed OCR models for {config.ocr_language}; set tessdata_path"
+            )
         raise FingerprintError(
-            f"No installed OCR models for {config.ocr_language}; set tessdata_path"
+            f'OCR models for {config.ocr_language} require "docfgp[languages]" or tessdata_path'
         )
-    raise FingerprintError(
-        f'OCR models for {config.ocr_language} require "docfgp[languages]" or tessdata_path'
-    )
+    shared = [found for found in _directories() if all(found in h for h in holders.values())]
+    chosen = {model: shared[0] if shared else found[0] for model, found in holders.items()}
+    unloadable = f"OCR models for {config.ocr_language} cannot load together; set tessdata_path"
+    try:
+        root = Path(os.path.commonpath([directory for directory, _ in chosen.values()]))
+    except ValueError as exc:
+        raise FingerprintError(unloadable) from exc
+    paths = [
+        (directory / model).relative_to(root).as_posix() for model, (directory, _) in chosen.items()
+    ]
+    if any("+" in path or path.startswith("~") for path in paths):
+        raise FingerprintError(unloadable)
+    revisions = "+".join(dict.fromkeys(revision for _, revision in chosen.values()))
+    return root, "+".join(paths), "+".join(chosen), f"tessdata_fast@{revisions}"
 
 
 def model_directory(config: FingerprintConfig) -> Path:
-    """Locate one Tesseract data directory holding every configured OCR model.
+    """Locate the Tesseract data directory that the configured OCR models load from.
 
     Args:
         config: OCR language and optional model directory.
 
     Returns:
-        The configured, bundled, or docfgp-languages model directory.
+        The configured, bundled, or docfgp-languages model directory, or the parent of both.
 
     Raises:
-        FingerprintError: No available directory holds every configured model.
+        FingerprintError: A configured model is missing or cannot load with the others.
     """
     return _resolve(config)[0]
 
@@ -97,14 +126,16 @@ def provenance(config: FingerprintConfig) -> dict[str, str]:
         config: OCR language and optional model directory.
 
     Returns:
-        Tesseract version and the pinned model revision, or ``custom``.
+        Model languages, Tesseract version, and the pinned model revision, or ``custom``.
 
     Raises:
-        FingerprintError: No available directory holds every configured model.
+        FingerprintError: A configured model is missing or cannot load with the others.
     """
+    _, _, language, models = _resolve(config)
     return {
+        "ocr_language": language,
         "ocr_engine": f"tesseract-{tesserocr.tesseract_version().split()[1]}",
-        "ocr_models": _resolve(config)[1],
+        "ocr_models": models,
     }
 
 
@@ -122,12 +153,13 @@ def read_text(image: Image.Image, config: FingerprintConfig, deadline: float) ->
     Raises:
         FingerprintError: Tesseract models are missing, or Tesseract times out or fails.
     """
+    directory, models, _, _ = _resolve(config)
     timeout = min(config.process_timeout, _remaining_seconds(deadline))
     try:
         with (
             tesserocr.PyTessBaseAPI(
-                path=f"{model_directory(config)}{os.sep}",
-                lang=config.ocr_language,
+                path=f"{directory}{os.sep}",
+                lang=models,
                 psm=tesserocr.PSM.AUTO,
                 variables={"debug_file": os.devnull},
             ) as api,

@@ -170,7 +170,6 @@ def _assemble_fingerprint(
             "visual_hash": "phash64-dct32",
             "render_dpi": config.render_dpi,
             "ocr_dpi": config.ocr_dpi,
-            "ocr_language": config.ocr_language,
             **ocr.provenance(config),
             "ocr_min_confidence": OCR_MIN_CONFIDENCE,
             "ocr_replacement_confidence": OCR_REPLACEMENT_CONFIDENCE,
