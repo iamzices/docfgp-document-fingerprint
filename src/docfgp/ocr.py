@@ -8,6 +8,7 @@ import io
 import json
 import math
 import os
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -40,11 +41,22 @@ _TSV_FIELDS = (
 
 
 @dataclass(frozen=True)
+class OCRWord:
+    """Hold one recognized word with its pixel bounds and block, paragraph, and line."""
+
+    text: str
+    confidence: float
+    bounds: tuple[int, int, int, int]
+    line: tuple[int, int, int]
+
+
+@dataclass(frozen=True)
 class OCRResult:
-    """Hold recognized text and mean confidence over recognized words."""
+    """Hold recognized text, its words, and mean confidence over recognized words."""
 
     text: str
     confidence: float | None
+    words: tuple[OCRWord, ...] = ()
 
 
 @functools.cache
@@ -147,7 +159,7 @@ def read_text(image: Image.Image, config: FingerprintConfig, deadline: float) ->
         deadline: Cooperative document deadline.
 
     Returns:
-        Text and Tesseract word confidence from the same OCR invocation.
+        Text, words, and Tesseract word confidence from the same OCR invocation.
 
     Raises:
         FingerprintError: Tesseract models are missing, or Tesseract times out or fails.
@@ -174,8 +186,7 @@ def read_text(image: Image.Image, config: FingerprintConfig, deadline: float) ->
         raise FingerprintError("Tesseract produced oversized text")
     if len(confidence_data.encode()) > config.max_text_chars * 16:
         raise FingerprintError("Tesseract produced oversized confidence data")
-    total_confidence = 0.0
-    word_count = 0
+    words = []
     try:
         for row in csv.DictReader(
             io.StringIO(confidence_data, newline=""), _TSV_FIELDS, delimiter="\t"
@@ -184,8 +195,22 @@ def read_text(image: Image.Image, config: FingerprintConfig, deadline: float) ->
                 continue
             confidence = float(row["conf"])
             if math.isfinite(confidence) and confidence >= 0:
-                total_confidence += confidence
-                word_count += 1
+                left, top = int(row["left"]), int(row["top"])
+                right, bottom = left + int(row["width"]), top + int(row["height"])
+                line = (int(row["block_num"]), int(row["par_num"]), int(row["line_num"]))
+                words.append(OCRWord(row["text"], confidence, (left, top, right, bottom), line))
     except (KeyError, ValueError, TypeError, AttributeError) as exc:
         raise FingerprintError(f"Cannot read Tesseract confidence data: {exc}") from exc
-    return OCRResult(text, round(total_confidence / word_count, 2) if word_count else None)
+    return OCRResult(text, mean_confidence(words) if words else None, tuple(words))
+
+
+def mean_confidence(words: Sequence[OCRWord]) -> float:
+    """Average word confidence.
+
+    Args:
+        words: At least one recognized word.
+
+    Returns:
+        Mean confidence rounded to two decimals.
+    """
+    return round(sum(word.confidence for word in words) / len(words), 2)

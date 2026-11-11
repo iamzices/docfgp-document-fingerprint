@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import contextlib
+import ctypes
 import math
 import subprocess
 import sys
@@ -28,13 +29,14 @@ RASTER_OCR_COVERAGE = 0.5
 
 @dataclass(frozen=True)
 class ExtractedPage:
-    """Carry one page's native text, grayscale renders, and OCR trigger."""
+    """Carry one page's native text, grayscale renders, OCR trigger, and native text bounds."""
 
     number: int
     native_text: str
     visual: Image.Image
     ocr_image: Image.Image | None
     ocr_reason: OCRReason | None
+    native_bounds: tuple[tuple[int, int, int, int], ...] = ()
 
 
 def identify(path: Path, config: FingerprintConfig) -> tuple[str, int]:
@@ -168,6 +170,22 @@ def _render(page: pdfium.PdfPage, dpi: int, config: FingerprintConfig) -> Image.
         return normalized_grayscale(image)
 
 
+def _device_bounds(
+    page: pdfium.PdfPage, rects: list[tuple[float, float, float, float]], size: tuple[int, int]
+) -> tuple[tuple[int, int, int, int], ...]:
+    # pdfium maps page points to render pixels, including page rotation and origin.
+    x, y = ctypes.c_int(), ctypes.c_int()
+    bounds = []
+    for left, bottom, right, top in rects:
+        corners = []
+        for page_x, page_y in ((left, bottom), (right, top)):
+            pdfium.raw.FPDF_PageToDevice(page.raw, 0, 0, *size, 0, page_x, page_y, x, y)
+            corners.append((x.value, y.value))
+        (x0, y0), (x1, y1) = corners
+        bounds.append((min(x0, x1), min(y0, y1), max(x0, x1), max(y0, y1)))
+    return tuple(bounds)
+
+
 def _ocr_reason(page: pdfium.PdfPage, text: str) -> OCRReason | None:
     if any(
         character == "\ufffd"
@@ -229,16 +247,22 @@ def pdf_pages(
                 try:
                     # pdfium replaces a hyphen at a line break with U+FFFE.
                     text = textpage.get_text_range().replace("\ufffe", "")
+                    reason = _ocr_reason(page, text)
+                    rects = (
+                        [textpage.get_rect(rect) for rect in range(textpage.count_rects())]
+                        if reason == "rasterized_content"
+                        else []
+                    )
                 finally:
                     textpage.close()
-                reason = _ocr_reason(page, text)
                 visual = _render(page, config.render_dpi, config)
                 try:
                     ocr_image = _render(page, config.ocr_dpi, config) if reason else None
                 except Exception:
                     visual.close()
                     raise
-                yield ExtractedPage(index + 1, text, visual, ocr_image, reason)
+                bounds = _device_bounds(page, rects, ocr_image.size) if ocr_image else ()
+                yield ExtractedPage(index + 1, text, visual, ocr_image, reason, bounds)
             except FingerprintError:
                 raise
             except Exception as exc:

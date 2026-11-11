@@ -64,6 +64,14 @@ def _scan_image(path: Path) -> None:
     image.save(path)
 
 
+def _recognized(text: str, confidence: float) -> ocr.OCRResult:
+    words = tuple(
+        ocr.OCRWord(word, confidence, (50 * index, 0, 50 * index + 40, 20), (1, 1, 1))
+        for index, word in enumerate(text.split())
+    )
+    return ocr.OCRResult(text, confidence if words else None, words)
+
+
 def test_pdf_is_deterministic_and_serializable(tmp_path: Path) -> None:
     """Generate identical complete fingerprints from repeat PDF invocations."""
     path = tmp_path / "one.pdf"
@@ -166,15 +174,20 @@ def test_short_native_text_does_not_trigger_ocr(tmp_path: Path) -> None:
 def test_low_confidence_ocr_is_not_text_evidence() -> None:
     """Keep uncertain OCR out of the page text and report why it was rejected."""
     low = "OCR confidence was too low to use its text"
-    assert _accept_ocr("", "imagined words", 5.0, rasterized=False) == (None, low)
-    assert _accept_ocr("", "invoice total", 30.0, rasterized=False) == ("invoice total", None)
-    assert _accept_ocr("", "", None, rasterized=False) == (None, "OCR found no reliable text")
-    body = "header alpha beta gamma"
-    assert _accept_ocr("header", body, 60.0, rasterized=True) == (body, None)
+    assert _accept_ocr(_recognized("imagined words", 5.0), (), rasterized=False) == (None, 5.0, low)
+    invoice = _recognized("invoice total", 30.0)
+    assert _accept_ocr(invoice, (), rasterized=False) == ("invoice total", 30.0, None)
+    empty = (None, None, "OCR found no reliable text")
+    assert _accept_ocr(_recognized("", 0.0), (), rasterized=False) == empty
+    header = ((0, 0, 40, 20),)
+    body = _recognized("header alpha beta gamma", 60.0)
+    assert _accept_ocr(body, header, rasterized=True) == ("alpha beta gamma", 60.0, None)
     unconfident = "OCR did not provide confident additional text"
-    assert _accept_ocr("header", body, 59.9, rasterized=True) == (None, unconfident)
-    assert _accept_ocr("header", "header alpha", 90.0, rasterized=True) == (None, unconfident)
-    assert _accept_ocr("header", "header", 90.0, rasterized=True) == (None, None)
+    body = _recognized("header alpha beta gamma", 59.9)
+    assert _accept_ocr(body, header, rasterized=True) == (None, 59.9, unconfident)
+    short = _recognized("header alpha", 90.0)
+    assert _accept_ocr(short, header, rasterized=True) == (None, 90.0, unconfident)
+    assert _accept_ocr(_recognized("header", 90.0), header, rasterized=True) == (None, None, None)
 
 
 def test_ocr_models_are_resolved_before_fingerprinting(tmp_path: Path) -> None:
@@ -347,5 +360,5 @@ def test_rasterized_page_with_native_header_uses_ocr(tmp_path: Path) -> None:
     document.save()
     bundle = Fingerprinter().fingerprint(path)
     assert bundle.quality.pages[0].ocr_reason == "rasterized_content"
-    assert bundle.quality.pages[0].source == "ocr"
+    assert bundle.quality.pages[0].source == "native_and_ocr"
     assert bundle.shingle_total > 0

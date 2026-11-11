@@ -13,7 +13,7 @@ from typing import Any, Literal
 
 QualityStatus = Literal["text_and_visual", "text_only", "visual_only", "insufficient_evidence"]
 TextEvidence = Literal["word_shingles", "character_shingles", "exact_only", "none"]
-PageSource = Literal["native", "ocr", "none"]
+PageSource = Literal["native", "ocr", "native_and_ocr", "none"]
 OCRReason = Literal[
     "missing_native_text", "invalid_native_text", "rasterized_content", "image_input"
 ]

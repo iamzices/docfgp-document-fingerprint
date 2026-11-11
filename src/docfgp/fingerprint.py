@@ -27,13 +27,13 @@ from .schemas import (
 from .visual import page_phash, visual_keys
 from .winnowing import anchors
 
-SCHEMA_VERSION = "2.0"
+SCHEMA_VERSION = "2.1"
 ALGORITHM_VERSION = "1.6"
 WORD_SHINGLE_SIZE = 5
 CHAR_SHINGLE_SIZE = 13
 ANCHOR_WINDOW = 32
 OCR_MIN_CONFIDENCE = 30.0
-OCR_REPLACEMENT_CONFIDENCE = 60.0
+OCR_ADDITION_CONFIDENCE = 60.0
 
 
 def _raw_hash(path: Path, deadline: float) -> str:
@@ -54,19 +54,37 @@ def _shingles(tokens: tuple[str, ...]) -> Iterator[str]:
 
 
 def _accept_ocr(
-    native: str, recognized: str, confidence: float | None, *, rasterized: bool
-) -> tuple[str | None, str | None]:
-    """Return OCR text that meets the confidence rules, or a warning explaining its rejection."""
-    if not recognized or confidence is None:
-        return None, "OCR found no reliable text"
-    if rasterized:
-        novel = set(word_tokens(recognized)) - set(word_tokens(native))
-        if confidence >= OCR_REPLACEMENT_CONFIDENCE and len(novel) >= 3:
-            return recognized, None
-        return None, "OCR did not provide confident additional text" if novel else None
-    if confidence >= OCR_MIN_CONFIDENCE:
-        return recognized, None
-    return None, "OCR confidence was too low to use its text"
+    result: ocr.OCRResult,
+    native_bounds: tuple[tuple[int, int, int, int], ...],
+    *,
+    rasterized: bool,
+) -> tuple[str | None, float | None, str | None]:
+    """Return OCR text and its confidence, or a warning explaining its rejection.
+
+    On rasterized pages, only words outside native text bounds are returned, as additions.
+    """
+    recognized = strict_text(result.text)
+    if not recognized or result.confidence is None:
+        return None, None, "OCR found no reliable text"
+    if not rasterized:
+        if result.confidence >= OCR_MIN_CONFIDENCE:
+            return recognized, result.confidence, None
+        return None, result.confidence, "OCR confidence was too low to use its text"
+    lines: dict[tuple[int, int, int], list[ocr.OCRWord]] = {}
+    for word in result.words:
+        x = (word.bounds[0] + word.bounds[2]) / 2
+        y = (word.bounds[1] + word.bounds[3]) / 2
+        if not any(
+            left <= x <= right and top <= y <= bottom for left, top, right, bottom in native_bounds
+        ):
+            lines.setdefault(word.line, []).append(word)
+    if not lines:
+        return None, None, None
+    confidence = ocr.mean_confidence([word for line in lines.values() for word in line])
+    added = strict_text("\n".join(" ".join(word.text for word in line) for line in lines.values()))
+    if confidence >= OCR_ADDITION_CONFIDENCE and len(word_tokens(added)) >= 3:
+        return added, confidence, None
+    return None, confidence, "OCR did not provide confident additional text"
 
 
 def _assemble_fingerprint(
@@ -167,7 +185,7 @@ def _assemble_fingerprint(
             "ocr_dpi": config.ocr_dpi,
             **ocr.provenance(config),
             "ocr_min_confidence": OCR_MIN_CONFIDENCE,
-            "ocr_replacement_confidence": OCR_REPLACEMENT_CONFIDENCE,
+            "ocr_addition_confidence": OCR_ADDITION_CONFIDENCE,
             "raster_ocr_coverage": extract.RASTER_OCR_COVERAGE,
             "shingle_counts_included": config.include_shingle_counts,
         },
@@ -235,16 +253,14 @@ class Fingerprinter:
                     if ocr_image is not None:
                         try:
                             result = ocr.read_text(ocr_image, self.config, deadline)
-                            confidence = result.confidence
-                            accepted, warning = _accept_ocr(
-                                native,
-                                strict_text(result.text),
-                                confidence,
+                            accepted, confidence, warning = _accept_ocr(
+                                result,
+                                page.native_bounds,
                                 rasterized=page.ocr_reason == "rasterized_content",
                             )
                             if accepted:
-                                extracted = accepted
-                                source = "ocr"
+                                source = "native_and_ocr" if extracted else "ocr"
+                                extracted = f"{extracted} {accepted}" if extracted else accepted
                         except FingerprintError as exc:
                             warning = str(exc)
                     if warning:
