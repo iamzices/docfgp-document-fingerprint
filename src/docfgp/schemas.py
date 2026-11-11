@@ -149,7 +149,6 @@ class DocumentFingerprint:
     shingle_counts: tuple[tuple[str, int], ...]
     shingle_total: int
     shingle_unique: int
-    passage_anchors: tuple[str, ...]
     page_hashes: tuple[PageHash, ...]
     quality: Quality
     parameters: Mapping[str, int | float | str | bool] = field(default_factory=dict)
@@ -183,7 +182,6 @@ class DocumentFingerprint:
             "shingle_counts": [[value, count] for value, count in self.shingle_counts],
             "shingle_total": self.shingle_total,
             "shingle_unique": self.shingle_unique,
-            "passage_anchors": list(self.passage_anchors),
             "page_hashes": [
                 {"page": item.page, "phash": item.phash, "lookup_keys": list(item.lookup_keys)}
                 for item in self.page_hashes

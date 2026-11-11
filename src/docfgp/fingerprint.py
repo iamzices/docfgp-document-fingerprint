@@ -10,7 +10,7 @@ from contextlib import closing
 from pathlib import Path
 
 from . import extract, ocr
-from .minhash import BANDS, COMPONENTS, ROWS, band_keys, sketch, stable_digest
+from .minhash import BANDS, COMPONENTS, ROWS, band_keys, feature_digest, sketch, stable_digest
 from .normalize import strict_text, tolerant_text, word_tokens
 from .schemas import (
     DocumentFingerprint,
@@ -27,8 +27,8 @@ from .schemas import (
 from .visual import page_phash, visual_keys
 from .winnowing import anchors
 
-SCHEMA_VERSION = "1.1"
-ALGORITHM_VERSION = "1.4"
+SCHEMA_VERSION = "2.0"
+ALGORITHM_VERSION = "1.5"
 WORD_SHINGLE_SIZE = 5
 CHAR_SHINGLE_SIZE = 13
 ANCHOR_WINDOW = 32
@@ -50,7 +50,7 @@ def _raw_hash(path: Path, deadline: float) -> str:
 
 def _shingles(tokens: tuple[str, ...]) -> Iterator[str]:
     for index in range(len(tokens) - WORD_SHINGLE_SIZE + 1):
-        yield stable_digest("\x1f".join(tokens[index : index + WORD_SHINGLE_SIZE]).encode("utf-8"))
+        yield feature_digest("\x1f".join(tokens[index : index + WORD_SHINGLE_SIZE]).encode("utf-8"))
 
 
 def _accept_ocr(
@@ -100,7 +100,7 @@ def _assemble_fingerprint(
     for index in range(len(characters) - CHAR_SHINGLE_SIZE + 1):
         if index % 4096 == 0:
             _remaining_seconds(deadline)
-        char_features.add(stable_digest(characters[index : index + CHAR_SHINGLE_SIZE].encode()))
+        char_features.add(feature_digest(characters[index : index + CHAR_SHINGLE_SIZE].encode()))
         if len(char_features) > config.max_features:
             raise FingerprintError("Character shingles exceed max_features")
     char_sketch = sketch(char_features)
@@ -157,7 +157,6 @@ def _assemble_fingerprint(
         shingle_counts=tuple(sorted(counts.items())) if config.include_shingle_counts else (),
         shingle_total=sum(counts.values()),
         shingle_unique=len(counts),
-        passage_anchors=passage_anchors,
         page_hashes=page_hashes,
         quality=Quality(status, text_evidence, page_quality, tuple(quality_warnings)),
         parameters={

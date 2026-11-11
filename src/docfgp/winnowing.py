@@ -10,7 +10,7 @@ def anchors(hashes: Sequence[str], window: int = 32) -> tuple[str, ...]:
     """Winnow ordered shingle hashes with a rightmost minimum tie rule.
 
     Args:
-        hashes: SHA-256 word-shingle hashes in document order.
+        hashes: Word-shingle hashes in document order.
         window: Number of consecutive hashes per selection window.
 
     Returns:

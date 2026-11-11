@@ -76,7 +76,8 @@ def test_pdf_is_deterministic_and_serializable(tmp_path: Path) -> None:
     assert first.quality.status == "text_and_visual"
     assert first.page_count == 1
     assert first.shingle_total == 3
-    assert first.exact_hashes["canonical_sha256"]
+    assert [len(value) for value, _ in first.shingle_counts] == [16, 16, 16]
+    assert len(first.exact_hashes["canonical_sha256"]) == 64
     assert len(first.minhash) == 512
     assert len(first.lookup_keys["word_lsh"]) == 32
     assert len(first.page_hashes) == 1
@@ -238,12 +239,12 @@ def test_language_package_models_are_discovered(tmp_path: Path) -> None:
     missing = subprocess.run(
         [sys.executable, "-c", code], env=env, capture_output=True, text=True, check=False
     )
-    assert "No installed OCR models for eng+ara" in missing.stderr
+    assert "No installed OCR models for ara;" in missing.stderr
     absent = _languages_package(tmp_path / "absent", "raise ImportError\n")
     uninstalled = subprocess.run(
         [sys.executable, "-c", code], env=absent, capture_output=True, text=True, check=False
     )
-    assert 'require "docfgp[languages]"' in uninstalled.stderr
+    assert 'install "docfgp[languages]" for non-Latin scripts' in uninstalled.stderr
 
 
 def test_limits_and_invalid_input(tmp_path: Path) -> None:

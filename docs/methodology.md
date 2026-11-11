@@ -10,7 +10,7 @@ DocFGP computes a `DocumentFingerprint` for PDF, DOCX, PPTX, PNG, JPEG, TIFF, BM
 | Office conversion | [office2pdf](https://github.com/developer0hye/office2pdf) converts DOCX/PPTX to a temporary PDF | A common page representation |
 | Page extraction | [pypdfium2](https://github.com/pypdfium2-team/pypdfium2) extracts PDF text and renders pages; Pillow decodes images | Text, page images, and extraction provenance |
 | OCR when indicated | [Tesseract](https://github.com/tesseract-ocr/tesseract) runs on a bounded page image | Recognized text and mean word confidence |
-| Feature construction | SHA-256, shingles, MinHash, winnowing, and perceptual hashing | A versioned, serializable fingerprint |
+| Feature construction | SHA-256, BLAKE2b, shingles, MinHash, winnowing, and perceptual hashing | A versioned, serializable fingerprint |
 
 Pages are processed in order. Native PDF text is used when it has word tokens and valid decoded characters. OCR is attempted when native text is missing or invalid, or when an embedded image covers at least half of a page. When an image-heavy page also has native text, OCR replaces that text if its mean recognized-word confidence is at least 60 and it contributes at least three new tokens. For missing or invalid native text, accepted OCR needs confidence of at least 30. Page quality records OCR attempts, results, and warnings. These thresholds are deterministic text-selection rules.
 
@@ -28,14 +28,14 @@ Reading order and OCR quality influence the token sequence. Canonical equality m
 | --- | --- | --- |
 | Raw hash | SHA-256 of original bytes | Byte identity |
 | Canonical hash | SHA-256 of nonempty canonical text | Exact extracted-text identity across formats |
-| Word features | Consecutive five-token shingles, each hashed with SHA-256 | Text resemblance and occurrence counts |
+| Word features | Consecutive five-token shingles, each hashed to 64 bits with BLAKE2b | Text resemblance and occurrence counts |
 | Character features | Consecutive 13-character shingles of the tolerant text | Retrieval across some OCR differences |
 | MinHash | 512 deterministic components for each shingle set | Approximate set similarity |
 | LSH keys | 32 bands of 16 MinHash components per sketch | Indexed candidate retrieval |
-| Passage anchors | Rightmost minimum word-shingle hash in each 32-shingle window | Retrieval of shared passages |
+| Passage anchors | Rightmost minimum word-shingle hash in each 32-shingle window, stored as passage lookup keys | Retrieval of shared passages |
 | Page hashes | 64-bit perceptual hash per nonblank rendered page; four 16-bit lookup keys | Visual candidate retrieval |
 
-Exact hashes and text-feature identifiers use SHA-256 for stable values across Python processes. MinHash permutations are derived from fixed seed material. Empty feature sets yield empty sketches and lookup-key groups. The current result uses schema version `1.1` and algorithm version `1.4`; it also records feature parameters, per-page provenance, warnings, and a quality status.
+Exact hashes use SHA-256 and text-feature identifiers use 64-bit BLAKE2b, so values are stable across Python processes. MinHash permutations are derived from fixed seed material. Empty feature sets yield empty sketches and lookup-key groups. The current result uses schema version `2.0` and algorithm version `1.5`; it also records feature parameters, per-page provenance, warnings, and a quality status.
 
 For two documents with word-shingle sets $S_A$ and $S_B$, the fraction of equal MinHash components estimates set Jaccard similarity:
 

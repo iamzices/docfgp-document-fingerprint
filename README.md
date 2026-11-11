@@ -48,7 +48,6 @@ record = fingerprint.to_dict()
 | `shingle_counts` | Hashed five-word shingle occurrence counts |
 | `shingle_total` | Total five-word shingle occurrences |
 | `shingle_unique` | Distinct five-word shingle hashes |
-| `passage_anchors` | Selected passage fingerprints |
 | `page_hashes` | Per-page visual hashes and lookup keys |
 | `quality` | Evidence status, page provenance, and warnings |
 | `parameters` | Parameters used to construct the fingerprint |

@@ -80,13 +80,13 @@ def _resolve(config: FingerprintConfig) -> tuple[Path, str, str, str]:
     for name in names:
         model = "script/Latin" if name in _LATIN_LANGUAGES and not _holders(name) else name
         holders[model] = _holders(model)
-    if not all(holders.values()):
+    missing = "+".join(model for model, found in holders.items() if not found)
+    if missing:
         if _language_models():
-            raise FingerprintError(
-                f"No installed OCR models for {config.ocr_language}; set tessdata_path"
-            )
+            raise FingerprintError(f"No installed OCR models for {missing}; set tessdata_path")
         raise FingerprintError(
-            f'OCR models for {config.ocr_language} require "docfgp[languages]" or tessdata_path'
+            f'No installed OCR models for {missing}; install "docfgp[languages]" '
+            "for non-Latin scripts or set tessdata_path"
         )
     shared = [found for found in _directories() if all(found in h for h in holders.values())]
     chosen = {model: shared[0] if shared else found[0] for model, found in holders.items()}

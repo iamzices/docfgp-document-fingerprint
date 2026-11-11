@@ -34,6 +34,18 @@ def stable_digest(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
+def feature_digest(data: bytes) -> str:
+    """Return a stable 64-bit BLAKE2b digest for a text feature.
+
+    Args:
+        data: Input bytes.
+
+    Returns:
+        Lowercase hexadecimal digest.
+    """
+    return hashlib.blake2b(data, digest_size=8).hexdigest()
+
+
 def sketch(features: Iterable[str]) -> tuple[str, ...]:
     """Compute a deterministic, 512-component MinHash over unique features.
 
