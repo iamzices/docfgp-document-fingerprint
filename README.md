@@ -10,7 +10,7 @@ DocFGP creates text and visual fingerprints for finding duplicates, near-duplica
 ## Features
 
 - PDF, DOCX, PPTX, PNG, JPEG, TIFF, BMP, and WebP support
-- Exact, near-duplicate, and partial-match
+- Exact, near-duplicate, and partial matching
 - OCR and visual fingerprints for scanned documents
 
 ## Requirements

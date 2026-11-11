@@ -1,7 +1,5 @@
 .venv/
 .tools/
-.benchmark/
-benchmark.json
 __pycache__/
 .pytest_cache/
 .mypy_cache/

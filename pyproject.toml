@@ -18,14 +18,13 @@ classifiers = [
 dependencies = ["pypdfium2>=4.30,<6", "Pillow>=10,<14", "regex>=2024.11.6", "tesserocr>=2.12,<3"]
 
 [project.optional-dependencies]
-benchmark = ["psutil>=6", "datasets>=3,<5"]
 languages = ["docfgp-languages>=1,<2"]
 
 [project.scripts]
 docfgp = "docfgp.cli:main"
 
 [dependency-groups]
-dev = ["pytest>=8", "ruff>=0.11", "mypy>=1.15", "psutil>=6", "reportlab>=4", "maturin>=1.9,<2"]
+dev = ["pytest>=8", "ruff>=0.11", "mypy>=1.15", "reportlab>=4", "maturin>=1.9,<2"]
 
 [tool.poetry.dependencies]
 python = ">=3.11,<4"

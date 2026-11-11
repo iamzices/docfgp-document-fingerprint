@@ -1,1 +1,1 @@
-"""Standalone benchmark evaluators distributed with the source repository."""
+"""Build scripts for the source repository."""

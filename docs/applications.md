@@ -25,6 +25,6 @@ For example, if a document with 100 hashed five-word occurrences shares 95 occur
 
 Raw-hash equality establishes byte identity. Canonical-text equality establishes equality of extracted normalized tokens. Shared templates, repeated footers, and OCR errors can affect approximate and visual scores. The application should define its review or skip policy using the relevant modality, page coverage, and extraction quality.
 
-For a native PDF and its scanned counterpart, OCR text and page hashes provide separate retrieval routes. Their effectiveness depends on recognition and rendering quality. The available evidence and measured results are described in [Methodology](methodology.md) and [Evaluation](evaluation.md).
+For a native PDF and its scanned counterpart, OCR text and page hashes provide separate retrieval routes. Their effectiveness depends on recognition and rendering quality. The available evidence is described in [Methodology](methodology.md).
 
 Fingerprinting runs locally on the CPU. DOCX/PPTX conversion uses office2pdf; scanned-text recognition uses Tesseract. The application owns storage and retrieval.
