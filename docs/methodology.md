@@ -7,14 +7,14 @@ DocFGP computes a `DocumentFingerprint` for PDF, DOCX, PPTX, PNG, JPEG, TIFF, BM
 | Stage | Implementation | Result |
 | --- | --- | --- |
 | Input validation | Format signature, file size, and Office package checks | Identified format or an explicit error |
-| Office conversion | [office2pdf](https://github.com/developer0hye/office2pdf) converts DOCX/PPTX to a temporary PDF | A common page representation |
+| Office conversion | With the `docfgp[office]` extra, [office2pdf](https://github.com/developer0hye/office2pdf) converts DOCX/PPTX to a temporary PDF | A common page representation |
 | Page extraction | [pypdfium2](https://github.com/pypdfium2-team/pypdfium2) extracts PDF text and renders pages; Pillow decodes images | Text, page images, and extraction provenance |
 | OCR when indicated | [Tesseract](https://github.com/tesseract-ocr/tesseract) runs on a bounded page image | Recognized text and mean word confidence |
 | Feature construction | SHA-256, BLAKE2b, shingles, MinHash, winnowing, and perceptual hashing | A versioned, serializable fingerprint |
 
 Pages are processed in order. Native PDF text is used when it has word tokens and valid decoded characters. OCR is attempted when native text is missing or invalid, or when an embedded image covers at least half of a page. When an image-heavy page also has native text, that text is kept, and OCR adds the words it recognizes outside native text areas if there are at least three and their mean confidence is at least 60. For missing or invalid native text, accepted OCR needs confidence of at least 30. Page quality records OCR attempts, results, and warnings. These thresholds are deterministic text-selection rules.
 
-OCR uses the models named by `ocr_language`, which defaults to English (`eng`). The package also includes the general Latin model (`script/Latin`), which OCR uses for Latin-alphabet language codes such as `deu`, `fra`, or `spa` when no installed model has that code; Fraktur, early-modern, and Vietnamese text require their own models. The optional `docfgp[languages]` extra adds the models for every language written in a non-Latin script, such as `chi_sim` or `ara`, which combine with the included models, as in `deu+ara`, and `tessdata_path` selects a custom model directory. Creating a `Fingerprinter` with a missing model raises `FingerprintError`. `parameters` records the models used, the Tesseract version, and the model revision.
+OCR uses the models named by `ocr_language`, which defaults to English (`eng`). The `docfgp-latin` dependency provides it and the general Latin model (`script/Latin`), which OCR uses for Latin-alphabet language codes such as `deu`, `fra`, or `spa` when no installed model has that code; Fraktur, early-modern, and Vietnamese text require their own models. The optional `docfgp[languages]` extra adds the models for every language written in a non-Latin script, such as `chi_sim` or `ara`, which combine with those models, as in `deu+ara`, and `tessdata_path` selects a custom model directory. Creating a `Fingerprinter` with a missing model raises `FingerprintError`. `parameters` records the models used, the Tesseract version, and the model revision.
 
 ## Text representation
 

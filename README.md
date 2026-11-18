@@ -22,6 +22,7 @@ DocFGP creates text and visual fingerprints for finding duplicates, near-duplica
 
 ```bash
 pip install docfgp
+pip install "docfgp[office]"     # DOCX and PPTX
 pip install "docfgp[languages]"  # OCR for non-Latin scripts
 ```
 

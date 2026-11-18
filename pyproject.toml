@@ -4,8 +4,8 @@ build-backend = "maturin"
 
 [project]
 name = "docfgp"
-version = "0.4.0"
-description = "DocFGP is a Python library that fingerprints documents to find duplicates."
+version = "0.5.0"
+description = "DocFGP fingerprints documents to find duplicates."
 readme = "README.md"
 requires-python = ">=3.11"
 license = "Apache-2.0"
@@ -15,9 +15,16 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
-dependencies = ["pypdfium2>=4.30,<6", "Pillow>=10,<14", "regex>=2024.11.6", "tesserocr>=2.12,<3"]
+dependencies = [
+    "pypdfium2>=4.30,<6",
+    "Pillow>=10,<14",
+    "regex>=2024.11.6",
+    "tesserocr>=2.12,<3",
+    "docfgp-latin>=1,<2",
+]
 
 [project.optional-dependencies]
+office = ["docfgp-office>=1,<2"]
 languages = ["docfgp-languages>=1,<2"]
 
 [project.scripts]
@@ -33,7 +40,6 @@ python = ">=3.11,<4"
 python-source = "src"
 module-name = "docfgp._native"
 features = ["pyo3/extension-module"]
-include = [{ path = "src/docfgp/tessdata/**/*.traineddata", format = ["sdist", "wheel"] }]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -60,5 +66,5 @@ max-args = 5
 [tool.mypy]
 python_version = "3.11"
 strict = true
-files = ["src/docfgp", "scripts"]
+files = ["src/docfgp"]
 ignore_missing_imports = true

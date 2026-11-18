@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import ctypes
+import importlib.util
 import math
 import subprocess
 import sys
@@ -148,6 +149,9 @@ def _check_image(path: Path) -> str:
 
 @contextlib.contextmanager
 def _converted_pdf(path: Path, config: FingerprintConfig, deadline: Deadline) -> Iterator[Path]:
+    if importlib.util.find_spec("docfgp_office") is None:
+        raise FingerprintError('DOCX and PPTX need office2pdf; install "docfgp[office]"')
+
     with tempfile.TemporaryDirectory(prefix="docfgp-office-") as directory:
         pdf = Path(directory) / "converted.pdf"
         _run_office_converter(path, pdf, config, deadline)

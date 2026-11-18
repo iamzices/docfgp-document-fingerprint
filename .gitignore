@@ -9,4 +9,3 @@ dist/
 target/
 *.so
 *.pyd
-*.traineddata

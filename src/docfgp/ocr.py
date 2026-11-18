@@ -6,20 +6,19 @@ import csv
 import functools
 import importlib
 import io
-import json
 import math
 import os
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
+import docfgp_latin
 import tesserocr
 from PIL import Image
 
 from .schemas import Box, Deadline, FingerprintConfig, FingerprintError, converted_errors
 
-_TESSDATA = Path(__file__).with_name("tessdata")
-_MANIFEST = json.loads((_TESSDATA / "models.json").read_text(encoding="utf-8"))
+_TESSDATA = docfgp_latin.TESSDATA
 _LATIN_SCRIPT_MODEL = "script/Latin"
 _LATIN_LANGUAGES = frozenset(
     "afr aze bos bre cat ceb ces cos cym dan deu epo est eus fao fil fin fra fry gla gle glg hat "
@@ -170,7 +169,7 @@ def model_directory(config: FingerprintConfig) -> Path:
         config: OCR language and optional model directory.
 
     Returns:
-        The configured, bundled, or docfgp-languages model directory, or the parent of both.
+        The configured, docfgp-latin, or docfgp-languages model directory, or their parent.
 
     Raises:
         FingerprintError: A configured model is missing or cannot load with the others.
@@ -293,7 +292,7 @@ def _has_models(directory: Path, names: Sequence[str]) -> bool:
 
 
 def _model_directories() -> tuple[_ModelDirectory, ...]:
-    return (_ModelDirectory(_TESSDATA, _MANIFEST["revision"]), *_language_models())
+    return (_ModelDirectory(_TESSDATA, docfgp_latin.REVISION), *_language_models())
 
 
 @functools.cache

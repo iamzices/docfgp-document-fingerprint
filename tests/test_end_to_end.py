@@ -7,6 +7,7 @@ import sys
 import zipfile
 from pathlib import Path
 
+import docfgp_latin
 import pytest
 import reportlab
 from PIL import Image, ImageDraw, ImageFont
@@ -116,6 +117,18 @@ def test_docx_converts_to_pdf_text(tmp_path: Path) -> None:
     assert office.exact_hashes["canonical_sha256"] == native.exact_hashes["canonical_sha256"]
 
 
+def test_office_files_name_the_office_extra_when_it_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Explain how to install DOCX and PPTX support when docfgp-office is absent."""
+    docx = tmp_path / "one.docx"
+    _docx(docx, "alpha beta gamma")
+    monkeypatch.setitem(sys.modules, "docfgp_office", None)
+
+    with pytest.raises(FingerprintError, match=r'install "docfgp\[office\]"'):
+        Fingerprinter().fingerprint(docx)
+
+
 def test_image_and_blank_evidence_states(tmp_path: Path) -> None:
     """Report visual-only and insufficient-evidence outcomes explicitly."""
     path = tmp_path / "image.png"
@@ -205,10 +218,10 @@ def test_low_confidence_ocr_is_not_text_evidence() -> None:
 
 
 def test_ocr_models_are_resolved_before_fingerprinting(tmp_path: Path) -> None:
-    """Use bundled or configured models and reject missing ones at construction."""
-    bundled = FingerprintConfig()
-    assert ocr.model_directory(bundled) == Path(ocr.__file__).with_name("tessdata")
-    assert ocr.provenance(bundled)["ocr_models"].startswith("tessdata_fast@")
+    """Use docfgp-latin or configured models and reject missing ones at construction."""
+    default = FingerprintConfig()
+    assert ocr.model_directory(default) == docfgp_latin.TESSDATA
+    assert ocr.provenance(default)["ocr_models"].startswith("tessdata_fast@")
 
     with pytest.raises(FingerprintError, match="tessdata_path"):
         Fingerprinter(FingerprintConfig(ocr_language="klingon"))
@@ -237,13 +250,13 @@ def test_latin_alphabet_codes_fall_back_to_script_latin(
 def test_models_from_both_packages_load_together(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Load script/Latin from the base package with a docfgp-languages model."""
+    """Load script/Latin from docfgp-latin with a docfgp-languages model."""
     (tmp_path / "ara.traineddata").touch()
     monkeypatch.setattr(ocr, "_language_models", lambda: (ocr._ModelDirectory(tmp_path, "0" * 40),))
 
     config = FingerprintConfig(ocr_language="deu+ara")
-    bundled = Path(ocr.__file__).with_name("tessdata")
-    assert ocr.model_directory(config) == Path(os.path.commonpath([bundled, tmp_path]))
+    common = os.path.commonpath([docfgp_latin.TESSDATA, tmp_path])
+    assert ocr.model_directory(config) == Path(common)
     assert ocr.provenance(config)["ocr_language"] == "script/Latin+ara"
 
 

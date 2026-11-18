@@ -1,21 +1,8 @@
-//! Convert DOCX and PPTX files to PDF and compute MinHash minima natively.
+//! Compute MinHash minima natively.
 
-use std::path::PathBuf;
-
-use pyo3::exceptions::PyRuntimeError;
 use pyo3::prelude::*;
-use pyo3::types::PyBytes;
 
 const PRIME: u64 = (1 << 61) - 1;
-
-/// Convert a DOCX or PPTX file to PDF bytes.
-#[pyfunction]
-fn office_to_pdf(py: Python<'_>, path: PathBuf) -> PyResult<Bound<'_, PyBytes>> {
-    let result = py
-        .detach(|| office2pdf::convert(&path))
-        .map_err(|error| PyRuntimeError::new_err(error.to_string()))?;
-    Ok(PyBytes::new(py, &result.pdf))
-}
 
 // Reduce by folding, since 2^61 is congruent to 1 modulo the Mersenne prime.
 fn mod_prime(value: u128) -> u64 {
@@ -44,6 +31,5 @@ fn minhash(py: Python<'_>, values: Vec<u64>, coefficients: Vec<(u64, u64)>) -> V
 
 #[pymodule]
 fn _native(module: &Bound<'_, PyModule>) -> PyResult<()> {
-    module.add_function(wrap_pyfunction!(office_to_pdf, module)?)?;
     module.add_function(wrap_pyfunction!(minhash, module)?)
 }

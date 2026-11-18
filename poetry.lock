@@ -264,14 +264,42 @@ files = [
 
 [[package]]
 name = "docfgp-languages"
-version = "1.0.0"
-description = "DocFGP Languages provides the Tesseract models DocFGP uses to OCR every script."
+version = "1.0.1"
+description = "DocFGP Languages provides the Tesseract models DocFGP uses to OCR non-Latin scripts."
 optional = true
 python-versions = ">=3.11"
 groups = ["main"]
 markers = "extra == \"languages\""
 files = [
-    {file = "docfgp_languages-1.0.0-py3-none-any.whl", hash = "sha256:e54910fd1c24a1266aa7e446814afbe820f200697f43a09760e143f36e6b5a27"},
+    {file = "docfgp_languages-1.0.1-py3-none-any.whl", hash = "sha256:063f18b122c6979e6e6a496c58ad2e8fa2525e189d9fd0c01d055e18c635b26a"},
+]
+
+[[package]]
+name = "docfgp-latin"
+version = "1.0.0"
+description = "DocFGP Latin provides the Tesseract models DocFGP uses to OCR the Latin script."
+optional = false
+python-versions = ">=3.11"
+groups = ["main"]
+files = [
+    {file = "docfgp_latin-1.0.0-py3-none-any.whl", hash = "sha256:439fd9c42d7880ea836391f8e7cd2470bf80d6227af4a1a271a3f94c2bcf6273"},
+]
+
+[[package]]
+name = "docfgp-office"
+version = "1.0.0"
+description = "DocFGP Office provides the office2pdf converter DocFGP uses to convert DOCX and PPTX files."
+optional = true
+python-versions = ">=3.11"
+groups = ["main"]
+markers = "extra == \"office\""
+files = [
+    {file = "docfgp_office-1.0.0-cp311-abi3-macosx_10_12_x86_64.whl", hash = "sha256:72619576808d867a271fab69284f75609fbc580638421746f065c0179933a3c5"},
+    {file = "docfgp_office-1.0.0-cp311-abi3-macosx_11_0_arm64.whl", hash = "sha256:485dbeb2550b8414d0e00612ba2339107504f0d8972853ed905e3c4ff8e91e50"},
+    {file = "docfgp_office-1.0.0-cp311-abi3-manylinux_2_28_aarch64.whl", hash = "sha256:5a9b529e0cbf55d6096574bac8db95d3ea6c522ae19360d0741729ec71801581"},
+    {file = "docfgp_office-1.0.0-cp311-abi3-manylinux_2_28_x86_64.whl", hash = "sha256:87816bf67bc2d2d819208bc25fb54517a022499d690cc5e85cdb614f203bd9e4"},
+    {file = "docfgp_office-1.0.0-cp311-abi3-win_amd64.whl", hash = "sha256:c7c78a7f9e520121b2d81581f551bc7208e09ef8416ece048926e08e1541720e"},
+    {file = "docfgp_office-1.0.0.tar.gz", hash = "sha256:995cd110d1eeafbea045dea8a2b8ac9c642e37f36f95972bc9e741b39b1b3220"},
 ]
 
 [[package]]
@@ -1018,8 +1046,9 @@ files = [
 
 [extras]
 languages = ["docfgp-languages"]
+office = ["docfgp-office"]
 
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11,<4"
-content-hash = "2dfe00a3a0fc4f5dbbf5860aefcbd54be4f9ed6fe41e142062e667a95a237fbf"
+content-hash = "63b058b1640ce1469b11697257ce93033bc0d41253d2b97356b025e721c6cf18"
